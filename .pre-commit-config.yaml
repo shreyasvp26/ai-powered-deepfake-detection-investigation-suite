@@ -1,9 +1,5 @@
 # See https://pre-commit.com — aligns with docs/PROJECT_PLAN_v10.md Section 15 Phase 3
-# Use a Python 3.10 conda env when running hooks (project pin). If `python3.10` is missing,
-# pre-commit falls back to whatever interpreter launched `pre-commit` (may warn on version skew).
-
-default_language_version:
-  python: python3.10
+# Use a Python 3.10 conda env for development per PROJECT_PLAN; hooks use the active interpreter.
 
 repos:
   - repo: https://github.com/psf/black
