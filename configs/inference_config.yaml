@@ -1,0 +1,6 @@
+# Runtime inference (PROJECT_PLAN_v10 §13). Blink disabled per RF3.
+fps_sampling: 1
+max_frames: 30
+enable_gradcam: false
+use_blink: false
+blink_weight: 0.0

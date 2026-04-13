@@ -1,0 +1,4 @@
+# Weighted-sum fusion baseline (grid-search fallback). Primary fusion: models/fusion_lr.pkl
+w_spatial: 0.65
+w_temporal: 0.35
+threshold: 0.5

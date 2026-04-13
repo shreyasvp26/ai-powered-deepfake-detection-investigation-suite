@@ -1,0 +1,60 @@
+# DSAN v3 training — single source of truth (PROJECT_PLAN_v10 §10.11)
+# Keys under `attribution` (V8-01): do not move `training` to top level.
+
+attribution:
+  model:
+    rgb_backbone: efficientnet_b4
+    freq_backbone: resnet18
+    fused_dim: 512
+    num_classes: 4
+
+  training:
+    epochs: 50
+    batch_size: 24
+    gradient_accumulation_steps: 4 # effective batch = 96
+    num_workers: 8
+    pin_memory: true
+    prefetch_factor: 4
+    sampler: stratified_batch # StratifiedBatchSampler — mutually exclusive with batch_size in DataLoader (V9-01)
+    mixed_precision: true
+    early_stopping:
+      enabled: true
+      monitor: val_macro_f1
+      patience: 7
+      mode: max
+
+  optimizer:
+    type: adamw
+    backbone_lr: 1.0e-5
+    head_lr: 3.0e-4
+    weight_decay: 1.0e-4
+
+  scheduler:
+    type: cosine_annealing
+    warmup_epochs: 5
+    min_lr: 1.0e-7
+
+  loss:
+    alpha: 1.0
+    beta: 0.2
+    temperature: 0.15
+
+  augmentation:
+    horizontal_flip: true
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.1
+    random_erasing:
+      probability: 0.1
+
+  data:
+    train_split: data/splits/train_identity_safe.json
+    val_split: data/splits/val_identity_safe.json
+    test_split: data/splits/test_identity_safe.json
+    methods: [Deepfakes, Face2Face, FaceSwap, NeuralTextures]
+    frames_per_video: 30
+
+  normalization:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]

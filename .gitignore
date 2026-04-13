@@ -1,1 +1,13 @@
+data/
+models/
+__pycache__/
+*.pyc
+.env
+wandb/
+outputs/
 .DS_Store
+*.pth
+*.pkl
+*.p
+*.npy
+*.egg-info/

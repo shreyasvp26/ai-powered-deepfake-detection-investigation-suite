@@ -1,0 +1,3 @@
+# Streamlit upload limit: 1024 MB (1 GB) per docs/PROJECT_PLAN_v10.md Section 13
+[server]
+maxUploadSize = 1024
