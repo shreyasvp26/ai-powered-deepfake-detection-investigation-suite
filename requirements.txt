@@ -1,18 +1,25 @@
-# Pinned versions per docs/PROJECT_PLAN_v10.md §4.1–4.3.
-# PyTorch with CUDA (Linux GPU server): use --index-url https://download.pytorch.org/whl/cu121
-# OpenCV on Apple Silicon: prefer `conda install -c conda-forge opencv` if pip wheels fail (plan §4.1).
-
+# Install inside a Python 3.10 conda env (PROJECT_PLAN_v10.md §4.1).
+# After a successful full install, regenerate a lockfile with:
+#   pip freeze > requirements.txt
+#
+# --- Pinned core (§4.3) ---
 torch==2.1.2
 torchvision==0.16.2
 torchaudio==2.1.2
+timm==0.9.12
+facenet-pytorch==2.5.2
+mediapipe==0.10.9
+# Linux / GPU server: pip wheel (§4.2). macOS arm64: use `conda install -c conda-forge opencv` instead.
+opencv-python==4.9.0.80 ; sys_platform == "linux"
+# Linux GPU server only (§4.2) — not expected to install on macOS arm64.
+insightface>=0.7 ; sys_platform == "linux"
+onnxruntime-gpu>=1.16.0 ; sys_platform == "linux"
+
+# --- From §4.1 (compatible ranges where the plan does not pin) ---
 numpy>=1.24.0,<2.0.0
 pandas>=2.0.0
 scikit-learn>=1.3.0
 joblib>=1.3.0
-mediapipe==0.10.9
-facenet-pytorch==2.5.2
-timm==0.9.12
-opencv-python==4.9.0.80
 wandb>=0.16.0
 tensorboard>=2.14.0
 PyYAML>=6.0.1
@@ -27,6 +34,8 @@ seaborn>=0.13.0
 plotly>=5.18.0
 flask>=3.0.0
 requests>=2.31.0
+
+# --- Dev (§4.1 / NFR-09) ---
 pytest>=7.4.0
 black>=24.0.0
 isort>=5.13.0

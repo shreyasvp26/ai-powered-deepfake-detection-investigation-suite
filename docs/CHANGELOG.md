@@ -4,6 +4,7 @@ Document and codebase history aligned with [PROJECT_PLAN.md](PROJECT_PLAN.md) Se
 
 | Version | Summary |
 |---------|---------|
+| **v10.1** | Phase 3 detection: vendor `xception.py`, `xception_loader` (strict load, `weights_only=False`, fc/last_linear alias in loader only), `SpatialDetector`, `TemporalAnalyzer` + `inference_config` temporal block, `evaluate_spatial_xception.py`, notebooks 02–03, pytest; pre-commit excludes vendor Xception; ongoing data pipeline / splits / dataset fixes from prior work. |
 | **v2.2** | Original full project structure and module set. |
 | **v3.0** | Structural updates; introduced errors (RetinaFace on macOS, invalid torchvision v2 GPU API, wrong gated-fusion gate input, unrealistic Mac latency table). |
 | **v4.0** | Pre-mortem audit: SRM in DataLoader, gated fusion, blink deprecated, identity-safe splits, remote Flask API, SupCon hyperparameter adjustments, and v3 fixes. |

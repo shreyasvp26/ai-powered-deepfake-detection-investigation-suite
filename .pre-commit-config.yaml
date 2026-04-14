@@ -1,5 +1,8 @@
 # See https://pre-commit.com — aligns with docs/PROJECT_PLAN_v10.md Section 15 Phase 3
-# Use a Python 3.10 conda env for development per PROJECT_PLAN; hooks use the active interpreter.
+# Hooks run with Python 3.10 per PROJECT_PLAN §4.1 (use `conda activate deepfake`).
+
+default_language_version:
+  python: python3.10
 
 repos:
   - repo: https://github.com/psf/black
@@ -7,15 +10,18 @@ repos:
     hooks:
       - id: black
         args: ["--line-length", "100"]
+        exclude: ^src/modules/network/xception\.py$
 
   - repo: https://github.com/pycqa/isort
     rev: 5.13.2
     hooks:
       - id: isort
         args: ["--profile", "black", "--line-length", "100"]
+        exclude: ^src/modules/network/xception\.py$
 
   - repo: https://github.com/pycqa/flake8
     rev: 7.1.1
     hooks:
       - id: flake8
         args: ["--max-line-length=100"]
+        exclude: ^src/modules/network/xception\.py$

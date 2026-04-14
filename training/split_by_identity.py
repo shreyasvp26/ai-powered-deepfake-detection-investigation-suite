@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Build identity-safe train/val/test JSON from official FF++ pair splits (UI2, V5-23, V8-06)."""
+"""Build identity-safe train/val/test splits from FF++ pair lists (UI2, V5-23, V8-06).
+
+Writes the **same JSON schema as official FF++ splits**: each ``*_identity_safe.json`` file is
+a JSON **array** of ``[source_id, target_id]`` string pairs (PROJECT_PLAN_v10.md §5.5).
+
+Real (original) YouTube clip IDs per partition (sorted ``source_id`` sets) are written to
+``real_source_ids_identity_safe.json`` as one JSON object with keys ``train``, ``val``,
+``test`` — this is an extra artifact beyond the official pair-list files (V5-23).
+"""
 
 from __future__ import annotations
 
@@ -13,6 +21,8 @@ from typing import List, Set, Tuple
 def load_pairs(path: Path) -> List[Tuple[str, str]]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     out: List[Tuple[str, str]] = []
+    if isinstance(raw, dict) and "pairs" in raw:
+        raw = raw["pairs"]
     for item in raw:
         if isinstance(item, (list, tuple)) and len(item) == 2:
             out.append((str(item[0]), str(item[1])))
@@ -25,7 +35,7 @@ def main() -> None:
         "--train-json",
         type=Path,
         default=Path("data/splits/train.json"),
-        help="Official FF++ train split (list of [src, tgt] pairs).",
+        help="Official FF++ train split (JSON array of [src, tgt] pairs).",
     )
     parser.add_argument(
         "--test-json",
@@ -37,7 +47,7 @@ def main() -> None:
         "--out-dir",
         type=Path,
         default=Path("data/splits"),
-        help="Output directory for train/val/test *_identity_safe.json files.",
+        help="Directory for train/val/test *_identity_safe.json (pair lists only).",
     )
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -89,25 +99,25 @@ def main() -> None:
     def filter_pairs(sources: Set[str]) -> List[List[str]]:
         return [[a, b] for a, b in train_pairs if a in sources]
 
-    def build_payload(sources: Set[str]) -> dict:
-        return {
-            "pairs": filter_pairs(sources),
-            "real_source_ids": sorted(sources),
-        }
-
     args.out_dir.mkdir(parents=True, exist_ok=True)
     for name, src_set in (
         ("train_identity_safe.json", train_sources),
         ("val_identity_safe.json", val_sources),
         ("test_identity_safe.json", test_sources),
     ):
-        payload = build_payload(src_set)
+        pairs_out = filter_pairs(src_set)
         out_path = args.out_dir / name
-        out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        print(
-            f"Wrote {out_path} — fake pairs: {len(payload['pairs'])}, "
-            f"reals: {len(payload['real_source_ids'])}"
-        )
+        out_path.write_text(json.dumps(pairs_out, indent=2), encoding="utf-8")
+        print(f"Wrote {out_path} — {len(pairs_out)} pair entries (JSON array)")
+
+    real_payload = {
+        "train": sorted(train_sources),
+        "val": sorted(val_sources),
+        "test": sorted(test_sources),
+    }
+    real_path = args.out_dir / "real_source_ids_identity_safe.json"
+    real_path.write_text(json.dumps(real_payload, indent=2), encoding="utf-8")
+    print(f"Wrote {real_path} — real (original) source IDs per partition")
 
     print(f"Fake train pairs: {len(filter_pairs(train_sources))}")
     print(f"Real train IDs:   {len(real_train)}")

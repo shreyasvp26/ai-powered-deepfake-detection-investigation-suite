@@ -4,3 +4,12 @@ max_frames: 30
 enable_gradcam: false
 use_blink: false
 blink_weight: 0.0
+
+# Module 2 — temporal (§7). Weights re-normalised to sum 1 if needed.
+temporal:
+  window_size: 30
+  weights:
+    global_variance: 0.30
+    sign_flip_rate: 0.25
+    max_window_variance: 0.25
+    max_jump: 0.20

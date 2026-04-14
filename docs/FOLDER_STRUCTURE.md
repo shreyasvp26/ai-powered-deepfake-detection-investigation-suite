@@ -29,7 +29,7 @@ DeepFake-Detection/
 │   ├── train_config.yaml
 │   ├── inference_config.yaml
 │   └── fusion_weights.yaml
-├── notebooks/                         # Phase 2+ (placeholder notebooks later)
+├── notebooks/                         # Phase 2+ (see notebooks/README.md)
 ├── src/                               # Phase 1: package roots + utils
 │   ├── __init__.py
 │   ├── utils.py
@@ -68,11 +68,13 @@ DeepFake-Detection/
 │   │   ├── __init__.py
 │   │   └── report_generator.py
 │   └── pipeline.py
-├── training/                          # Phase 2+ scripts
-├── app/                               # Phase 8
+├── training/                          # Phase 2+ scripts (see training/README.md)
+├── app/                               # Phase 8 (see app/README.md)
 ├── tests/                             # Phase 9
 ├── models/                            # .gitignored weights
 └── data/                              # .gitignored dataset
 ```
 
 **Checkpoints:** `attribution_dsan_v3_epoch{N}_f1{score:.3f}.pth`; best symlinked as `attribution_dsan_v3.pth`.
+
+**Git:** `.gitignore` ignores `data/raw/` and `data/processed/` but keeps `data/splits/` (and JSON split files) trackable per PROJECT_PLAN_v10.md Section 14.

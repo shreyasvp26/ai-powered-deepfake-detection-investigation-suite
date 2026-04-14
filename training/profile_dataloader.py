@@ -8,8 +8,9 @@ import json
 import tempfile
 import time
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
+import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import DataLoader
@@ -20,7 +21,7 @@ from src.utils import load_config
 
 
 def _make_synthetic_crop_dir(n_samples: int) -> Tuple[Path, List[str], List[int]]:
-    """Flat ``{id}.jpg`` layout expected by :class:`DSANDataset`."""
+    """Flat ``{id}.jpg`` layout (PROJECT_PLAN_v10.md §10.4 snippet)."""
     root = Path(tempfile.mkdtemp(prefix="dsan_profile_"))
     video_ids: List[str] = []
     labels: List[int] = []
@@ -42,6 +43,29 @@ def _load_split_pairs(path: Path) -> list:
     raise ValueError(f"Unrecognized split format in {path}")
 
 
+def _pairs_to_video_ids_and_labels(
+    crop_dir: Path,
+    pairs: list,
+    methods: List[str],
+) -> Tuple[List[str], List[int]]:
+    """Map FF++ ``[src,tgt]`` pairs to ``video_stem`` + class index using on-disk folders."""
+    vids: List[str] = []
+    labs: List[int] = []
+    for a, b in pairs:
+        stem = f"{a}_{b}"
+        found = False
+        for mi, m in enumerate(methods):
+            d = crop_dir / m / stem
+            if d.is_dir() and list(d.glob("frame_*.png")):
+                vids.append(stem)
+                labs.append(mi)
+                found = True
+                break
+        if not found:
+            continue
+    return vids, labs
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=Path("configs/train_config.yaml"))
@@ -49,7 +73,7 @@ def main() -> None:
         "--crop-dir",
         type=Path,
         default=None,
-        help="Directory with {video_id}.jpg (default: try data/processed/faces, else synthetic).",
+        help="Face crop root (``data/processed/faces`` per plan §5.4).",
     )
     parser.add_argument(
         "--num-batches",
@@ -61,42 +85,77 @@ def main() -> None:
 
     cfg = load_config(args.config)
     tcfg = cfg["attribution"]["training"]
+    dcfg = cfg["attribution"]["data"]
     batch_size = int(tcfg["batch_size"])
     num_workers = int(tcfg["num_workers"])
     pin_memory = bool(tcfg["pin_memory"])
     prefetch = tcfg.get("prefetch_factor", 2)
     prefetch_arg = int(prefetch) if num_workers > 0 else None
+    methods = list(dcfg.get("methods", ["Deepfakes", "Face2Face", "FaceSwap", "NeuralTextures"]))
+    frames_per_video = int(dcfg.get("frames_per_video", 30))
 
-    split_path = Path(cfg["attribution"]["data"]["train_split"])
+    split_path = Path(dcfg["train_split"])
     crop_dir = args.crop_dir if args.crop_dir is not None else Path("data/processed/faces")
     use_synthetic = True
     video_ids: List[str] = []
     labels: List[int] = []
 
+    min_rows = batch_size * args.num_batches + batch_size
     if split_path.exists() and crop_dir.is_dir():
         pairs = _load_split_pairs(split_path)
-        candidate_ids = [f"{a}_{b}" for a, b in pairs]
-        existing = [vid for vid in candidate_ids if (crop_dir / f"{vid}.jpg").is_file()]
-        min_needed = batch_size * args.num_batches + batch_size
-        if len(existing) >= min_needed:
-            use_synthetic = False
-            video_ids = existing[:min_needed]
-            labels = [i % 4 for i in range(len(video_ids))]
+        vids, labs = _pairs_to_video_ids_and_labels(crop_dir, pairs, methods)
+        if vids:
+            try:
+                ds_try = DSANDataset(
+                    vids,
+                    labs,
+                    str(crop_dir),
+                    augment=False,
+                    frames_per_video=frames_per_video,
+                    crop_layout="auto",
+                    methods=methods,
+                )
+                if len(ds_try) >= min_rows:
+                    use_synthetic = False
+                    video_ids = vids
+                    labels = labs
+            except ValueError:
+                pass
 
     if use_synthetic:
         print("Using synthetic flat JPEGs (split or crops missing / insufficient).")
-        min_needed = batch_size * args.num_batches + batch_size
-        crop_dir, video_ids, labels = _make_synthetic_crop_dir(min_needed)
+        crop_dir, video_ids, labels = _make_synthetic_crop_dir(min_rows)
 
-    dataset = DSANDataset(video_ids, labels, str(crop_dir), augment=False)
-    sampler = StratifiedBatchSampler(labels, batch_size=batch_size, min_per_class=2)
-    loader = DataLoader(
-        dataset,
-        batch_sampler=sampler,
-        num_workers=num_workers,
-        pin_memory=pin_memory,
-        prefetch_factor=prefetch_arg,
-    )
+    def _build_loader(cdir: Path, vids: List[str], labs: List[int], syn: bool) -> Tuple[Any, Any, DataLoader]:
+        ds = DSANDataset(
+            vids,
+            labs,
+            str(cdir),
+            augment=False,
+            frames_per_video=frames_per_video,
+            crop_layout="auto",
+            methods=methods if not syn else None,
+        )
+        sam = StratifiedBatchSampler(
+            np.asarray(ds.labels, dtype=np.int64),
+            batch_size=batch_size,
+            min_per_class=2,
+        )
+        ld = DataLoader(
+            ds,
+            batch_sampler=sam,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            prefetch_factor=prefetch_arg,
+        )
+        return ds, sam, ld
+
+    try:
+        dataset, sampler, loader = _build_loader(crop_dir, video_ids, labels, use_synthetic)
+    except ValueError as exc:
+        print(f"StratifiedBatchSampler or dataset build failed ({exc}); using synthetic data.")
+        crop_dir, video_ids, labels = _make_synthetic_crop_dir(min_rows)
+        dataset, sampler, loader = _build_loader(crop_dir, video_ids, labels, True)
 
     n_available = len(loader)
     if n_available < 1:
@@ -117,11 +176,13 @@ def main() -> None:
     avg_ms = (elapsed / n_batches) * 1000.0
     print(f"DataLoader length (batches): {n_available}")
     print(f"Batches timed: {n_batches}")
+    print(f"DSANDataset layout: {dataset.layout}")
+    print(f"Dataset rows (frames): {len(dataset)}")
     print(f"Wall time total: {elapsed:.3f} s")
     print(f"Avg per batch: {avg_ms:.2f} ms")
     print(
         "If GPU util stays < 40% during training, increase num_workers "
-        f"(current {num_workers}) or prefetch_factor per PROJECT_PLAN §10.4."
+        f"(current {num_workers}) or prefetch_factor per PROJECT_PLAN_v10.md §10.4."
     )
 
 
