@@ -293,7 +293,13 @@ pip install flask requests           # for local → remote API proxy
 pip install pytest black isort flake8 pre-commit
 
 # Step 10: Freeze requirements
-pip freeze > requirements.txt
+#
+# CRITICAL: Do NOT overwrite the curated, pinned `requirements.txt` with a platform-specific
+# `pip freeze` dump. macOS (arm64) and Ubuntu (x86_64 + CUDA) resolve different transitive
+# dependency sets, so a single frozen file is not portable.
+#
+# Instead, export a per-machine lock snapshot for reproducibility/debugging:
+pip freeze > requirements-lock-local-macos.txt
 ```
 
 ### 4.2 Remote GPU Server Setup
@@ -561,6 +567,12 @@ wget -O data/splits/test.json \
 ```
 
 Store crops at **299×299** only. DSAN resizes to 224×224 on-the-fly in its transforms.
+
+**Multi-face policy (explicit):**
+- This pipeline is **single-face**. If multiple faces are present, select the **highest-confidence**
+  detection on (re-)detection frames, then track that face with the IoU tracker.
+- If tracking fails, re-detect and re-select the highest-confidence face.
+- Group scenes / multi-person attribution are out of scope for the BTech demo; document as a known limitation.
 
 **Time estimate for preprocessing on L4 GPU:**
 - Face extraction (5000 videos × 50 frames): ~2–3 hours (one-time cost)
@@ -1248,12 +1260,30 @@ Input: Fake face crop (224 × 224 × 3, RGB, ImageNet-normalized)
 > CPU/GPU starvation. The correct solution is to move SRM into the DataLoader workers (CPU-parallel)
 > and keep FFT in `forward()` on GPU (FFT is fast on GPU, SRM convolution is not).
 
+#### 10.4.1 DSAN Training Sample Unit + Crop Layout (CRITICAL)
+
+This project stores face crops as **per-video frame sequences** (the output of `src/preprocessing/extract_faces.py`):
+
+- **Nested PNG layout (authoritative for this repo)**:
+  - `data/processed/faces/{Method}/{video_stem}/frame_000.png`
+  - Example: `data/processed/faces/Deepfakes/071_054/frame_012.png`
+
+For DSAN training, the dataset expands each video into up to `frames_per_video` frame samples:
+
+- **Training sample unit**: **one frame crop = one DSAN sample** (label = the video’s manipulation method).
+- **Video-level attribution at inference**: aggregate per-frame DSAN probabilities across sampled frames (see Section 10.13).
+
+> Note: A legacy “flat JPG” layout (`{crop_dir}/{video_id}.jpg`) may exist in older experiments, but the
+> plan and code MUST support the nested `frame_*.png` layout produced by this project’s preprocessing.
+
 ```python
 # src/attribution/dataset.py
+from pathlib import Path
+
 import torch
 import torch.nn.functional as F
-from torchvision import transforms
 from PIL import Image
+from torchvision import transforms
 
 # SRM kernels (CPU, fixed) — module-level singleton
 _SRM_KERNELS = None
@@ -1266,18 +1296,46 @@ def _get_srm_kernels():
         f2 = torch.tensor([[0,0,0,0,0],[0,0,1,0,0],[0,1,-4,1,0],[0,0,1,0,0],[0,0,0,0,0]],
                           dtype=torch.float32)
         f3 = torch.tensor([[-1,2,-2,2,-1],[2,-6,8,-6,2],[-2,8,-12,8,-2],
-                            [2,-6,8,-6,2],[-1,2,-2,2,-1]], dtype=torch.float32)
+                           [2,-6,8,-6,2],[-1,2,-2,2,-1]], dtype=torch.float32)
         _SRM_KERNELS = torch.stack([f1, f2, f3]).unsqueeze(1)  # (3, 1, 5, 5)
     return _SRM_KERNELS
 
 class DSANDataset(torch.utils.data.Dataset):
-    def __init__(self, video_ids, labels, crop_dir, augment=False):
-        self.video_ids = video_ids
-        self.labels = labels
-        self.crop_dir = crop_dir
-        self.augment = augment
+    """
+    DSAN training dataset.
 
-        # Precompute normalisation constants once — avoids re-allocating per sample [V6-04]
+    Nested crops layout (preferred):
+      crop_dir/{Method}/{video_stem}/frame_XXX.png
+
+    Each video expands to up to frames_per_video samples (one row per frame file).
+    """
+    def __init__(self, video_ids, labels, crop_dir, augment=False, frames_per_video=30, methods=None):
+        self.crop_dir = Path(crop_dir)
+        self.frames_per_video = int(frames_per_video)
+        self.methods = methods
+
+        # Expand (video_id, label) rows → (frame_path, label) rows (one per frame crop)
+        self.paths = []
+        self.y = []
+        for vid, lab in zip(video_ids, labels):
+            vid = str(vid)
+            frame_dir = None
+            if methods:
+                for m in methods:
+                    cand = self.crop_dir / m / vid
+                    if cand.is_dir():
+                        frame_dir = cand
+                        break
+            if frame_dir is None:
+                frame_dir = self.crop_dir / vid  # allow Method/vid ids
+            frames = sorted(frame_dir.glob("frame_*.png"))[: self.frames_per_video]
+            for fp in frames:
+                self.paths.append(fp)
+                self.y.append(int(lab))
+
+        if not self.paths:
+            raise ValueError("No DSAN samples found. Check crop_dir + layout + splits.")
+
         self._mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
         self._std  = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
@@ -1286,30 +1344,28 @@ class DSANDataset(torch.utils.data.Dataset):
             transforms.RandomHorizontalFlip() if augment else transforms.Lambda(lambda x: x),
             transforms.ColorJitter(0.2, 0.2, 0.1) if augment else transforms.Lambda(lambda x: x),
             transforms.ToTensor(),
-            # RandomErasing must follow ToTensor() as it operates on Tensors [V7-11]
             transforms.RandomErasing(p=0.1) if augment else transforms.Lambda(lambda x: x),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
     def __getitem__(self, idx):
-        img = Image.open(f"{self.crop_dir}/{self.video_ids[idx]}.jpg").convert('RGB')
+        img = Image.open(self.paths[idx]).convert("RGB")
         rgb = self.rgb_transform(img)  # (3, 224, 224), ImageNet-normalized
 
-        # Compute SRM on CPU in DataLoader worker (not in GPU forward)
-        # IMPORTANT: unnormalize from ImageNet, THEN scale to 0–255 [UI4]
-        rgb_01    = rgb * self._std + self._mean           # approx [0, 1]
-        gray_01   = 0.2989 * rgb_01[0:1] + 0.5870 * rgb_01[1:2] + 0.1140 * rgb_01[2:3]
-        gray_255  = gray_01 * 255.0                        # [0, 255] — SRM scale
+        # SRM in DataLoader worker: unnormalize → grayscale → scale to [0, 255] [UI4]
+        rgb_01   = rgb * self._std + self._mean
+        gray_01  = 0.2989 * rgb_01[0:1] + 0.5870 * rgb_01[1:2] + 0.1140 * rgb_01[2:3]
+        gray_255 = gray_01 * 255.0
 
         kernels = _get_srm_kernels()
         srm = F.conv2d(gray_255.unsqueeze(0), kernels, padding=2)
-        srm = torch.clamp(srm, -10, 10) / 10.0   # normalise to ~[-1, 1] [V5-03]
+        srm = torch.clamp(srm, -10, 10) / 10.0
         srm = srm.squeeze(0)  # (3, 224, 224)
 
-        return rgb, srm, torch.tensor(self.labels[idx], dtype=torch.long)
+        return rgb, srm, torch.tensor(self.y[idx], dtype=torch.long)
 
     def __len__(self):
-        return len(self.video_ids)
+        return len(self.paths)
 ```
 
 ### DataLoader and StratifiedBatchSampler
@@ -1877,6 +1933,27 @@ The ablation must show: (1) dual-stream > single-stream, (2) SupCon improves dis
 
 ---
 
+### 10.13 Attribution Inference Aggregation (Video-Level Method)
+
+DSAN operates on **frame crops**. For a video, run DSAN on the sampled face crops and aggregate to a
+single manipulation-method prediction:
+
+1. For each sampled frame \(i\), compute `probs_i = softmax(logits_i)` over the 4 methods.
+2. Compute the video distribution as the **mean probability**:
+
+\[
+\text{probs\_video} = \frac{1}{N}\sum_{i=1}^{N}\text{probs}_i
+\]
+
+3. Predicted method = `argmax(probs_video)`, confidence = `max(probs_video)`.
+
+**Frame selection rule (for stability + speed):**
+- Use the same sampled frames already used for detection (default `max_frames: 30`).
+- If `enable_gradcam: true`, run Grad-CAM++ only on the **top-k frames** by `max(probs_i)` (k=3–5).
+
+> This aggregation policy is intentionally simple and deterministic (no RNN/attention), which keeps
+> the demo stable and makes the evaluation reproducible.
+
 ## 11. Module 5 — Explainability (Grad-CAM++)
 
 ### Status: Optional (default off)
@@ -2154,6 +2231,11 @@ import torch, tempfile, os
 
 app = Flask(__name__)
 pipeline = None  # loaded once at startup
+
+# Upload-size guard (recommended):
+# Streamlit's `maxUploadSize` does NOT automatically protect the Flask side.
+# Set a server-side cap to avoid accidental memory blowups on very large uploads.
+# Example: app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024  # 1 GB
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
