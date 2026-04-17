@@ -39,7 +39,9 @@ class ExplainabilityModule:
 
     @staticmethod
     def _freq_target_layer(dsan: DSANv3) -> nn.Module:
-        layer4 = dsan.freq_stream.backbone[-1]
+        # ``FrequencyStream.backbone`` is ResNet ``children()[:-1]``: ends with layer4 then avgpool.
+        bb = dsan.freq_stream.backbone
+        layer4 = bb[-2]
         last_block = layer4[-1]
         return last_block.conv2
 
