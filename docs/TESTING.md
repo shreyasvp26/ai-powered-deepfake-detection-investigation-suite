@@ -48,3 +48,17 @@ Fill after Phase 9. Targets and tables are defined in [PROJECT_PLAN.md](PROJECT_
 | TBD | TBD | TBD | TBD |
 
 (Add 5–10 real cases with frames after evaluation.)
+
+## Local (no CUDA) vs GPU-only verification
+
+| What | Local / CPU | Needs GPU server |
+|------|-------------|------------------|
+| Unit tests (`pytest tests/`) | Yes — optional weights/CV2/torch tests skip if missing | Optional full run with weights |
+| `training/train_attribution.py --dry-run` | Yes — random init by default; add `--pretrained` for ImageNet download | Same |
+| `training/extract_fusion_features.py --stub-spatial` | Yes | Full spatial features need `full_c23.p` + crops |
+| `training/evaluate_detection_fusion.py --limit N` | Yes if weights + crops exist | Full FF++ eval |
+| Streamlit + bundled `sample_result.json` | Yes | Live API path needs tunnel |
+| DSAN Grad-CAM test (`tests/test_explainability.py`) | If `pytorch-grad-cam` installs for your Python | Faster on GPU |
+| FF++ bulk extraction, dataloader profile, full benchmarks | No | Yes |
+
+Identity-safe splits and ablation expectations: see plan §17 and V6-02 (report effective sample sizes honestly).

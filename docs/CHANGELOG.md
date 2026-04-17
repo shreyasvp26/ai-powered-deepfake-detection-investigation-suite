@@ -4,6 +4,7 @@ Document and codebase history aligned with [PROJECT_PLAN.md](PROJECT_PLAN.md) Se
 
 | Version | Summary |
 |---------|---------|
+| **v10.2** | No-GPU plan closure: DSAN v3 modules + `train_attribution.py --dry-run`, `explainability.py`, fusion + `Pipeline.run_on_video`, Streamlit five pages + `app/sample_results/` (JSON + t-SNE CSV), API client retries, `tests/fixtures/crops_demo`, preprocessing synthetic video test, `evaluate_detection_fusion.py` stub, report generator, docs/TESTING local-vs-GPU section, README offline quickstart. SupCon diagonal mask uses large negative finite value for numerical stability. Grad-CAM freq target = ResNet `layer4` (not avgpool). |
 | **v10.1** | Phase 3 detection: vendor `xception.py`, `xception_loader` (strict load, `weights_only=False`, fc/last_linear alias in loader only), `SpatialDetector`, `TemporalAnalyzer` + `inference_config` temporal block, `evaluate_spatial_xception.py`, notebooks 02–03, pytest; pre-commit excludes vendor Xception; ongoing data pipeline / splits / dataset fixes from prior work. |
 | **v2.2** | Original full project structure and module set. |
 | **v3.0** | Structural updates; introduced errors (RetinaFace on macOS, invalid torchvision v2 GPU API, wrong gated-fusion gate input, unrealistic Mac latency table). |

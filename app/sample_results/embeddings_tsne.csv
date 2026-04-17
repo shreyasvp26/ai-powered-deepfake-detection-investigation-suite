@@ -1,0 +1,13 @@
+x,y,label,method
+-12.4,8.2,0,Deepfakes
+-11.1,7.5,0,Deepfakes
+10.3,-6.1,1,Face2Face
+9.8,-5.4,1,Face2Face
+2.1,11.0,2,FaceSwap
+1.5,10.2,2,FaceSwap
+-4.2,-9.8,3,NeuralTextures
+-3.5,-10.5,3,NeuralTextures
+0.2,0.5,0,Deepfakes
+5.1,3.2,1,Face2Face
+-6.0,2.8,2,FaceSwap
+3.3,-7.1,3,NeuralTextures

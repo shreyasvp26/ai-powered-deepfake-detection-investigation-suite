@@ -30,6 +30,7 @@ def _dry_run(cfg: dict[str, Any], device: torch.device, *, pretrained: bool) -> 
         temperature=float(lc["temperature"]),
     )
     opt = torch.optim.AdamW(model.parameters(), lr=1e-4)
+    accum = max(1, int(cfg["attribution"]["training"].get("gradient_accumulation_steps", 1)))
 
     torch.manual_seed(0)
     b = 8
@@ -37,9 +38,10 @@ def _dry_run(cfg: dict[str, Any], device: torch.device, *, pretrained: bool) -> 
     srm = torch.clamp(torch.randn(b, 3, 224, 224, device=device), -1.0, 1.0)
     labels = torch.tensor([0, 0, 1, 1, 2, 2, 3, 3], dtype=torch.long, device=device)
 
+    opt.zero_grad(set_to_none=True)
     logits, emb = model(rgb, srm)
     loss, l_ce, l_con = criterion(logits, emb, labels)
-    loss.backward()
+    (loss / float(accum)).backward()
     opt.step()
     opt.zero_grad(set_to_none=True)
 
@@ -49,6 +51,7 @@ def _dry_run(cfg: dict[str, Any], device: torch.device, *, pretrained: bool) -> 
     print(
         "dry-run ok:",
         {
+            "gradient_accumulation_steps": accum,
             "loss": float(loss.detach()),
             "l_ce": float(l_ce.detach()),
             "l_con": float(l_con.detach()),

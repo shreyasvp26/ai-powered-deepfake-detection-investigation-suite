@@ -13,6 +13,11 @@ import streamlit as st
 
 st.set_page_config(page_title="DeepFake Detection", layout="wide", initial_sidebar_state="expanded")
 
+with st.sidebar:
+    st.caption(
+        "Offline: use **Bundled sample JSON** on Upload. GPU: tunnel port 5001, then HTTP API mode."
+    )
+
 st.title("DeepFake Detection")
 st.markdown(
     "Multi-page dashboard (sidebar): **Upload** → **Results** → **Attribution** → **Report** → **About**."

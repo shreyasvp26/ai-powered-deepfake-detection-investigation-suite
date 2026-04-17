@@ -8,6 +8,9 @@ These tests validate the key preprocessing invariants referenced in PROJECT_PLAN
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -55,4 +58,31 @@ def test_frame_sampler_metadata_keys() -> None:
     # Cannot reliably open a real video in unit tests without fixtures; just assert type and attributes exist.
     assert fs.fps == 1
     assert fs.max_frames == 5
+
+
+def test_frame_sampler_on_synthetic_avi() -> None:
+    cv2 = pytest.importorskip("cv2")
+    from src.preprocessing.frame_sampler import FrameSampler
+
+    h, w = 64, 64
+    with tempfile.NamedTemporaryFile(suffix=".avi", delete=False) as tf:
+        path = Path(tf.name)
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 10.0, (w, h))
+    if not writer.isOpened():
+        pytest.skip("VideoWriter not available in this environment")
+    try:
+        for _ in range(20):
+            writer.write(np.zeros((h, w, 3), dtype=np.uint8))
+    finally:
+        writer.release()
+
+    try:
+        fs = FrameSampler(fps=2, max_frames=5)
+        frames, meta = fs.sample(path)
+        assert len(frames) >= 1
+        assert int(meta["sampled_frames"]) == len(frames)
+        for k in ("original_fps", "duration", "total_frames"):
+            assert k in meta
+    finally:
+        path.unlink(missing_ok=True)
 

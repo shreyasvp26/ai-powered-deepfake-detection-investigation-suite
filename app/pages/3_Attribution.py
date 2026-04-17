@@ -10,7 +10,7 @@ if str(_REPO_ROOT) not in sys.path:
 import streamlit as st
 
 from app.components.attribution_chart import show_attribution_probs
-from app.components.embedding_plot import show_mock_embedding_scatter
+from app.components.embedding_plot import show_mock_embedding_scatter, try_show_tsne_artifact
 
 st.title("Attribution")
 
@@ -27,5 +27,7 @@ if attr and isinstance(attr, dict):
 st.subheader("Class probabilities")
 show_attribution_probs(attr if isinstance(attr, dict) else None)
 
-st.subheader("Embedding space (t-SNE placeholder)")
-show_mock_embedding_scatter(seed=42)
+st.subheader("Embedding space (t-SNE)")
+if not try_show_tsne_artifact(_REPO_ROOT):
+    st.info("No `outputs/embeddings_tsne.csv` found; showing mock layout below.")
+    show_mock_embedding_scatter(seed=42)

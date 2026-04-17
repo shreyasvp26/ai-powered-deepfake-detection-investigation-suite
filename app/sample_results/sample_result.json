@@ -1,0 +1,27 @@
+{
+  "verdict": "FAKE",
+  "fusion_score": 0.87,
+  "spatial_score": 0.82,
+  "temporal_score": 0.41,
+  "per_frame_predictions": [0.78, 0.81, 0.85, 0.88, 0.9],
+  "metadata": {
+    "frames_analysed": 5,
+    "demo": true,
+    "source": "bundled_sample_result.json"
+  },
+  "technical": {
+    "device": "mock",
+    "inference_time_s": 1.2,
+    "used_fallback": false
+  },
+  "attribution": {
+    "predicted_method": "Deepfakes",
+    "class_probabilities": {
+      "Deepfakes": 0.45,
+      "Face2Face": 0.2,
+      "FaceSwap": 0.2,
+      "NeuralTextures": 0.15
+    }
+  },
+  "heatmap_paths": {}
+}

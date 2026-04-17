@@ -13,13 +13,13 @@ BTech major project: **multi-signal** deepfake detection (spatial XceptionNet + 
 
    On **Apple Silicon**, use `conda install -c conda-forge opencv` for OpenCV (plan Section 4.1); `requirements.txt` does not install `opencv-python` wheels on macOS.
 
-   After everything installs cleanly, you can capture the exact environment with:
+   After everything installs cleanly, capture a **machine-specific** lockfile; do **not** overwrite the curated `requirements.txt` (see `PROJECT_PLAN_v10.md` §4.1):
 
    ```bash
-   pip freeze > requirements.txt
+   pip freeze > requirements-lock-local.txt
    ```
 
-   Re-apply the **Linux-only** markers from the plan (OpenCV / `insightface` / `onnxruntime-gpu`) after a freeze, because `pip freeze` drops environment markers.
+   Re-apply **Linux-only** environment markers from the plan if you merge pins back into the main requirements file.
 
 3. **Editable package install:**
 
@@ -69,9 +69,16 @@ BTech major project: **multi-signal** deepfake detection (spatial XceptionNet + 
 
 (Fill after Phase 9 — see [docs/TESTING.md](docs/TESTING.md).)
 
+## Offline / mock demo (no GPU)
+
+1. Install dependencies and `pip install -e .` from the repo root.
+2. **Streamlit (bundled sample):** `streamlit run app/streamlit_app.py` → **Upload** → *Bundled sample JSON* or *Load bundled sample only* → open **Results** / **Attribution** / **Report**.
+3. **Flask mock API:** `python app/inference_api.py --mock` then `POST http://127.0.0.1:5001/analyze` (returns `app/sample_results/sample_result.json`).
+4. **Tests without Xception weights:** `pytest tests/` (tests that need `full_c23.p` or optional deps skip cleanly).
+
 ## Documentation
 
-- **Canonical spec:** [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) (symlink to `PROJECT_PLAN_v10.md`)
+- **Canonical spec:** [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) (same content as `PROJECT_PLAN_v10.md` in this repo)
 - **Build order:** [docs/MASTER_IMPLEMENTATION.md](docs/MASTER_IMPLEMENTATION.md)
 - **PRD:** [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)
 - **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
