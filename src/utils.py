@@ -7,7 +7,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-import torch
 import yaml
 
 
@@ -17,6 +16,10 @@ def get_device() -> str:
     This project does not use MPS for training or the main inference stack
     (see docs/PROJECT_PLAN_v10.md §3).
     """
+    try:
+        import torch  # local import: allows non-torch utilities to be used without torch installed
+    except ModuleNotFoundError:
+        return "cpu"
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
