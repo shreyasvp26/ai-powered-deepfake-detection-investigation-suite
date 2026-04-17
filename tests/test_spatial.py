@@ -7,6 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytest.importorskip("torch")
+
 from src.modules.network.xception_loader import load_xception
 from src.modules.spatial import SpatialDetector
 

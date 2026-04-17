@@ -130,14 +130,15 @@ def main() -> None:
     y_s = np.asarray(y_score, dtype=np.float64)
     y_hat = (y_s >= 0.5).astype(np.int32)
 
+    zdiv = 0  # sklearn: avoid undefined metric errors on degenerate confusion rows
     out = {
         "n_videos": int(len(y_t)),
         "manipulation": args.manipulation,
         "roc_auc": float(roc_auc_score(y_t, y_s)),
         "accuracy": float(accuracy_score(y_t, y_hat)),
-        "precision": float(precision_score(y_t, y_hat)),
-        "recall": float(recall_score(y_t, y_hat)),
-        "f1": float(f1_score(y_t, y_hat)),
+        "precision": float(precision_score(y_t, y_hat, zero_division=zdiv)),
+        "recall": float(recall_score(y_t, y_hat, zero_division=zdiv)),
+        "f1": float(f1_score(y_t, y_hat, zero_division=zdiv)),
     }
     print(json.dumps(out, indent=2))
 

@@ -1,11 +1,10 @@
 """End-to-end inference pipeline (CPU-safe), aligned to PROJECT_PLAN_v10.md §2 and §15.
 
-This implementation supports a GPU-less workflow by allowing:
-- **pre-extracted crops mode**: run detection on an existing folder of `frame_*.png` face crops
-  (the same layout produced by `src/preprocessing/extract_faces.py`).
-
-Later (GPU availability) you can extend this pipeline to accept a raw video path and run
-preprocessing internally, but pre-extracted mode is the critical path for Phase 5.
+Supports:
+- **Pre-extracted crops**: run on a folder of `frame_*.png` face crops (from
+  `src/preprocessing/extract_faces.py`).
+- **Raw video (local / CPU)**: sample frames, MTCNN + IoU tracker + aligner, then the same
+  spatial → temporal → fusion path as crops mode.
 """
 
 from __future__ import annotations
