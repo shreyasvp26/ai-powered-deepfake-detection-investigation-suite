@@ -1,0 +1,30 @@
+# Aligns with .pre-commit-config.yaml (Black 100 cols; vendor xception excluded there).
+# E203: Black-compatible slices (whitespace before ':').
+# E402: Streamlit requires early set_page_config; tests/app inject repo root before imports.
+
+[flake8]
+max-line-length = 100
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    .eggs,
+    *.egg-info,
+    src/modules/network/xception.py
+extend-ignore = E203
+per-file-ignores =
+    app/inference_api.py: E402
+    app/streamlit_app.py: E402
+    app/pages/1_Upload.py: E402
+    app/pages/2_Results.py: E402
+    app/pages/3_Attribution.py: E402
+    app/pages/4_Report.py: E402
+    app/pages/5_About.py: E402
+    tests/test_api_client.py: E402
+    tests/test_attribution.py: E402
+    tests/test_explainability.py: E402
+    tests/test_inference_api.py: E402
+    tests/test_preprocessing.py: E402
+    tests/test_report_generator.py: E402
+    tests/test_spatial.py: E402

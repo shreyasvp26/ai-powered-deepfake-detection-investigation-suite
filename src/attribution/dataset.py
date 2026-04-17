@@ -113,7 +113,9 @@ def _expand_nested_items(
     return items, labs
 
 
-def _expand_flat_items(crop_dir: Path, video_ids: Sequence[str], labels: Sequence[int]) -> Tuple[List[Path], List[int]]:
+def _expand_flat_items(
+    crop_dir: Path, video_ids: Sequence[str], labels: Sequence[int]
+) -> Tuple[List[Path], List[int]]:
     items = [crop_dir / f"{vid}.jpg" for vid in video_ids]
     return items, [int(x) for x in labels]
 

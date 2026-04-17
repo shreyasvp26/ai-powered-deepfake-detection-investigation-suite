@@ -62,7 +62,12 @@ def test_fake_attribution_section_pdf_does_not_crash() -> None:
         "temporal_score": 0.5,
         "attribution": {
             "predicted_method": "Deepfakes",
-            "class_probabilities": {"Deepfakes": 0.5, "Face2Face": 0.2, "FaceSwap": 0.2, "NeuralTextures": 0.1},
+            "class_probabilities": {
+                "Deepfakes": 0.5,
+                "Face2Face": 0.2,
+                "FaceSwap": 0.2,
+                "NeuralTextures": 0.1,
+            },
         },
         "metadata": {},
         "technical": {},

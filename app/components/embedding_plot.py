@@ -19,7 +19,11 @@ def try_show_tsne_artifact(repo_root: Path) -> bool:
     for p in candidates:
         if not p.is_file():
             continue
-        df = pd.read_csv(p)
+        try:
+            df = pd.read_csv(p)
+        except (OSError, ValueError) as e:
+            st.warning(f"Could not read embedding CSV `{p}`: {e}")
+            return True
         if not {"x", "y"}.issubset(df.columns):
             st.warning(f"Embedding CSV must include columns `x` and `y`: {p}")
             return True
@@ -34,7 +38,9 @@ def try_show_tsne_artifact(repo_root: Path) -> bool:
             rel = p.relative_to(repo_root)
         except ValueError:
             rel = p
-        st.caption(f"t-SNE artifact: `{rel}` (replace with `training/visualize_embeddings.py` output).")
+        st.caption(
+            f"t-SNE artifact: `{rel}` (replace with `training/visualize_embeddings.py` output)."
+        )
         return True
     return False
 

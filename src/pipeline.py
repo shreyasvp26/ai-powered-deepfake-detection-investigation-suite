@@ -80,7 +80,7 @@ class Pipeline:
                 "Missing Xception weights (full_c23.p). Provide PipelineConfig.xception_weights "
                 "or unzip FaceForensics weights under models/."
             )
-        # Local import keeps non-torch usage (e.g., docs/scripts) functional without torch installed.
+        # Local import: keep non-torch usage (e.g. docs/scripts) working without torch.
         from src.modules.spatial import SpatialDetector
 
         self._spatial = SpatialDetector(wpath, device=self.device)
@@ -89,7 +89,12 @@ class Pipeline:
 
     def run_on_crops_dir(self, crops_dir: str | Path) -> dict[str, Any]:
         """Analyze an already-extracted crops directory containing frame_*.png."""
-        if self._spatial is None or self._temporal is None or self._fusion is None or self._inf_cfg is None:
+        if (
+            self._spatial is None
+            or self._temporal is None
+            or self._fusion is None
+            or self._inf_cfg is None
+        ):
             self.load_models()
         assert self._spatial is not None and self._temporal is not None and self._fusion is not None
 
@@ -145,7 +150,12 @@ class Pipeline:
         Multi-face policy: always select the highest-confidence face on (re-)detection frames,
         then track that face.
         """
-        if self._spatial is None or self._temporal is None or self._fusion is None or self._inf_cfg is None:
+        if (
+            self._spatial is None
+            or self._temporal is None
+            or self._fusion is None
+            or self._inf_cfg is None
+        ):
             self.load_models()
         assert self._spatial is not None and self._temporal is not None and self._fusion is not None
 
@@ -160,7 +170,11 @@ class Pipeline:
         t0 = time.perf_counter()
 
         cfg_fps = int(self._inf_cfg.get("fps_sampling", 1)) if self._inf_cfg else 1
-        cfg_max = int(self._inf_cfg.get("max_frames", self.cfg.max_frames)) if self._inf_cfg else self.cfg.max_frames
+        cfg_max = (
+            int(self._inf_cfg.get("max_frames", self.cfg.max_frames))
+            if self._inf_cfg
+            else self.cfg.max_frames
+        )
         fps = int(fps_sampling) if fps_sampling is not None else cfg_fps
         mf = int(max_frames) if max_frames is not None else cfg_max
 
@@ -233,4 +247,3 @@ class Pipeline:
                 "used_fallback": fusion_out.used_fallback,
             },
         }
-

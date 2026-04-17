@@ -10,11 +10,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
-from app.api_client import (
-    DEFAULT_ANALYZE_URL,
-    analyze_video_bytes,
-    load_bundled_sample_result,
-)
+from app.api_client import DEFAULT_ANALYZE_URL, analyze_video_bytes, load_bundled_sample_result
 
 st.title("Upload")
 
@@ -100,7 +96,8 @@ if run_upload:
             wpath = _find_xception_weights()
             if wpath is None:
                 st.error(
-                    "Missing `full_c23.p` under `models/`. Local CPU mode needs FaceForensics++ weights."
+                    "Missing `full_c23.p` under `models/`. "
+                    "Local CPU mode needs FaceForensics++ weights."
                 )
             else:
                 try:

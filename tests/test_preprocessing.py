@@ -39,7 +39,13 @@ def test_face_tracker_update_with_dummy_detector() -> None:
 
     class DummyDetector:
         def detect(self, frame_rgb):
-            return [{"box": [10, 10, 50, 50], "confidence": 0.9, "landmarks": np.zeros((5, 2), dtype=np.float32)}]
+            return [
+                {
+                    "box": [10, 10, 50, 50],
+                    "confidence": 0.9,
+                    "landmarks": np.zeros((5, 2), dtype=np.float32),
+                }
+            ]
 
     tracker = FaceTracker(detector=DummyDetector(), iou_threshold=0.1)
     frame = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -55,7 +61,7 @@ def test_frame_sampler_metadata_keys() -> None:
     from src.preprocessing.frame_sampler import FrameSampler
 
     fs = FrameSampler(fps=1, max_frames=5)
-    # Cannot reliably open a real video in unit tests without fixtures; just assert type and attributes exist.
+    # No real video in unit tests without fixtures; assert type and attributes exist.
     assert fs.fps == 1
     assert fs.max_frames == 5
 
@@ -85,4 +91,3 @@ def test_frame_sampler_on_synthetic_avi() -> None:
             assert k in meta
     finally:
         path.unlink(missing_ok=True)
-

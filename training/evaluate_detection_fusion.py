@@ -15,13 +15,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 
 from src.pipeline import Pipeline, PipelineConfig
 from src.utils import get_device
@@ -71,15 +65,34 @@ def _resolve_dir(faces_root: Path, method: str, stem: str) -> Path | None:
 def main() -> None:
     p = argparse.ArgumentParser(description="Evaluate fusion detection score F on crops tree.")
     p.add_argument("--faces-root", type=Path, required=True, help="e.g. data/processed/faces")
-    p.add_argument("--split-json", type=Path, required=True, help="Fake split JSON list of [src,tgt].")
-    p.add_argument("--real-ids-json", type=Path, default=Path("data/splits/real_source_ids_identity_safe.json"))
+    p.add_argument(
+        "--split-json", type=Path, required=True, help="Fake split JSON list of [src,tgt]."
+    )
+    p.add_argument(
+        "--real-ids-json", type=Path, default=Path("data/splits/real_source_ids_identity_safe.json")
+    )
     p.add_argument("--partition", type=str, default="test", choices=("train", "val", "test"))
-    p.add_argument("--manipulation", type=str, required=True, choices=("Deepfakes", "Face2Face", "FaceSwap", "NeuralTextures"))
+    p.add_argument(
+        "--manipulation",
+        type=str,
+        required=True,
+        choices=("Deepfakes", "Face2Face", "FaceSwap", "NeuralTextures"),
+    )
     p.add_argument("--inference-config", type=Path, default=Path("configs/inference_config.yaml"))
     p.add_argument("--fusion-model", type=Path, default=Path("models/fusion_lr.pkl"))
-    p.add_argument("--xception-weights", type=Path, default=None, help="Path to full_c23.p (optional; searched under models/).")
+    p.add_argument(
+        "--xception-weights",
+        type=Path,
+        default=None,
+        help="Path to full_c23.p (optional; searched under models/).",
+    )
     p.add_argument("--models-dir", type=Path, default=Path("models"))
-    p.add_argument("--limit", type=int, default=None, help="Limit number of real and fake videos (local smoke).")
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit number of real and fake videos (local smoke).",
+    )
     p.add_argument("--device", type=str, default=None)
     args = p.parse_args()
 
@@ -123,7 +136,10 @@ def main() -> None:
         y_score.append(float(out["fusion_score"]))
 
     if len(y_true) < 2 or len(set(y_true)) < 2:
-        print(f"Not enough labelled examples (n={len(y_true)}). Check crop tree + splits.", file=sys.stderr)
+        print(
+            f"Not enough labelled examples (n={len(y_true)}). Check crop tree + splits.",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     y_t = np.asarray(y_true, dtype=np.int32)
@@ -145,4 +161,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -41,13 +41,19 @@ def _default_inline_sample() -> dict[str, Any]:
 def load_bundled_sample_result() -> dict[str, Any]:
     """Load `app/sample_results/sample_result.json` for offline dashboard / mock API parity."""
     if _SAMPLE_JSON.is_file():
-        with _SAMPLE_JSON.open(encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with _SAMPLE_JSON.open(encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return dict(_default_inline_sample())
     return dict(_default_inline_sample())
 
 
 def mock_analysis_result() -> dict[str, Any]:
-    """Offline payload matching the pipeline JSON shape (no Bs). Same as bundled file when present."""
+    """Offline payload matching the pipeline JSON shape (no Bs).
+
+    Same as bundled file when present.
+    """
     return load_bundled_sample_result()
 
 
@@ -61,7 +67,9 @@ def analyze_video_bytes(
 ) -> dict[str, Any]:
     """Send raw video bytes to the inference API; returns parsed JSON.
 
-    Retries on connection errors and 5xx responses with exponential backoff.
+    Retries on connection/timeout errors, on empty responses before ``raise_for_status``,
+    on **5xx** status codes, and on invalid JSON bodies. Does **not** retry **4xx** client
+    errors (``HTTPError`` from ``raise_for_status``).
     """
     endpoint = url or DEFAULT_ANALYZE_URL
     n = max(1, int(max_retries))
@@ -73,14 +81,24 @@ def analyze_video_bytes(
                 headers={"Content-Type": "application/octet-stream"},
                 timeout=timeout_s,
             )
-            if resp.status_code >= 500 and attempt < n - 1:
+        except (requests.ConnectionError, requests.Timeout) as e:
+            if attempt < n - 1:
                 time.sleep(retry_backoff_s * (2**attempt))
                 continue
-            resp.raise_for_status()
+            raise e
+
+        if resp.status_code >= 500 and attempt < n - 1:
+            time.sleep(retry_backoff_s * (2**attempt))
+            continue
+
+        resp.raise_for_status()
+
+        try:
             return resp.json()
-        except (requests.RequestException, ValueError):
+        except ValueError:
             if attempt < n - 1:
                 time.sleep(retry_backoff_s * (2**attempt))
                 continue
             raise
+
     raise RuntimeError("analyze_video_bytes: unreachable")  # pragma: no cover

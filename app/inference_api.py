@@ -35,8 +35,6 @@ def create_app(*, mock: bool = False) -> Flask:
             return jsonify(mock_analysis_result()), 200
 
         try:
-            from pathlib import Path
-
             from src.pipeline import Pipeline
         except ImportError as e:  # pragma: no cover - env-specific
             return jsonify({"error": f"server_unavailable: {e}"}), 503

@@ -23,7 +23,9 @@ class FusionResult:
 
 
 class FusionLayer:
-    def __init__(self, model_path: str | Path = "models/fusion_lr.pkl", threshold: float = 0.5) -> None:
+    def __init__(
+        self, model_path: str | Path = "models/fusion_lr.pkl", threshold: float = 0.5
+    ) -> None:
         self.model_path = Path(model_path)
         self.threshold = float(threshold)
         self._model: Any | None = None
@@ -50,4 +52,3 @@ class FusionLayer:
         proba = float(self._model.predict_proba(X)[0, 1])
         verdict = "FAKE" if proba >= self.threshold else "REAL"
         return FusionResult(fusion_score=proba, verdict=verdict, used_fallback=False)
-

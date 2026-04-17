@@ -1,37 +1,64 @@
 # Environment verification — run on local and remote before development (PROJECT_PLAN_v10 §4.4)
+from __future__ import annotations
+
+import importlib
 import sys
 
-import cv2
-import mediapipe as mp
-import streamlit
-import timm
-import torch
-from facenet_pytorch import MTCNN
 
-print(f"Python: {sys.version}")
+def _try(mod: str, attr: str | None = None) -> tuple[bool, str]:
+    try:
+        m = importlib.import_module(mod)
+        if attr:
+            getattr(m, attr)
+    except Exception as e:
+        return False, f"{mod}: {e}"
+    return True, f"{mod}: OK"
 
-print(f"PyTorch: {torch.__version__}")
-print(f"CUDA available: {torch.cuda.is_available()}")
-if hasattr(torch.backends, "mps"):
-    mps_ok = torch.backends.mps.is_available()
-    print(f"MPS available: {mps_ok}")
 
-# Project treats local Mac as CPU-only for this stack
-if torch.cuda.is_available():
-    device = "cuda"
-else:
-    device = "cpu"
-print(f"Using device: {device}")
+def main() -> None:
+    print(f"Python: {sys.version}\n")
 
-print(f"MediaPipe: {mp.__version__}")
+    ok_all = True
+    for mod, attr in (
+        ("torch", None),
+        ("cv2", None),
+        ("yaml", None),
+        ("timm", None),
+        ("PIL.Image", None),
+    ):
+        ok, msg = _try(mod, attr)
+        ok_all = ok_all and ok
+        print(msg)
 
-print(f"OpenCV: {cv2.__version__}")
+    try:
+        import torch
+    except ImportError:
+        print("PyTorch details: (not importable)")
+    else:
+        print(f"PyTorch: {torch.__version__}")
+        print(f"CUDA available: {torch.cuda.is_available()}")
+        if hasattr(torch.backends, "mps"):
+            print(f"MPS available: {torch.backends.mps.is_available()}")
+        print(f"Using device: {'cuda' if torch.cuda.is_available() else 'cpu'}")
 
-_ = MTCNN  # ensure facenet-pytorch / MTCNN import works
-print("MTCNN: OK")
+    # Face / UI (optional on minimal CI images)
+    for label, mod, attr in (
+        ("MediaPipe (optional for some scripts)", "mediapipe", None),
+        ("facenet-pytorch / MTCNN", "facenet_pytorch", "MTCNN"),
+        ("Streamlit (dashboard)", "streamlit", None),
+    ):
+        ok, msg = _try(mod, attr)
+        if not ok:
+            print(f"{label}: SKIP — {msg}")
+        else:
+            print(f"{label}: {msg}")
 
-print(f"timm: {timm.__version__}")
+    if ok_all:
+        print("\n--- Core dependencies verified ---")
+    else:
+        print("\n--- Core dependency check reported failures ---")
+        sys.exit(1)
 
-print(f"Streamlit: {streamlit.__version__}")
 
-print("\n--- All dependencies verified ---")
+if __name__ == "__main__":
+    main()

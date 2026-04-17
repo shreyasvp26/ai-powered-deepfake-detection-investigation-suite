@@ -24,7 +24,10 @@ class ReportGenerator:
     """Generate JSON and PDF forensic reports from a pipeline / dashboard result dict."""
 
     def generate(self, analysis_result: dict[str, Any], output_dir: str | Path) -> dict[str, str]:
-        """Write JSON and PDF under ``output_dir``. Returns paths with keys ``json_path``, ``pdf_path``."""
+        """Write JSON and PDF under ``output_dir``.
+
+        Returns paths with keys ``json_path``, ``pdf_path``.
+        """
         out = Path(output_dir).expanduser().resolve()
         out.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")

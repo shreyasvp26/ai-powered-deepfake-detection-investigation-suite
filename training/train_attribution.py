@@ -60,15 +60,24 @@ def _dry_run(cfg: dict[str, Any], device: torch.device, *, pretrained: bool) -> 
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Train DSAN v3 (use --dry-run locally without GPU data).")
+    p = argparse.ArgumentParser(
+        description="Train DSAN v3 (use --dry-run locally without GPU data)."
+    )
     p.add_argument("--config", type=Path, default=Path("configs/train_config.yaml"))
-    p.add_argument("--dry-run", action="store_true", help="One forward+backward on random tensors (CPU/GPU).")
+    p.add_argument(
+        "--dry-run", action="store_true", help="One forward+backward on random tensors (CPU/GPU)."
+    )
     p.add_argument(
         "--pretrained",
         action="store_true",
-        help="With --dry-run: load ImageNet weights (needs network). Default dry-run uses random init.",
+        help=(
+            "With --dry-run: load ImageNet weights (needs network). "
+            "Default dry-run uses random init."
+        ),
     )
-    p.add_argument("--device", type=str, default=None, help="cpu | cuda (default: cuda if available else cpu).")
+    p.add_argument(
+        "--device", type=str, default=None, help="cpu | cuda (default: cuda if available else cpu)."
+    )
     args = p.parse_args()
 
     cfg = load_config(args.config)

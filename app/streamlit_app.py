@@ -20,7 +20,8 @@ with st.sidebar:
 
 st.title("DeepFake Detection")
 st.markdown(
-    "Multi-page dashboard (sidebar): **Upload** → **Results** → **Attribution** → **Report** → **About**."
+    "Multi-page dashboard (sidebar): **Upload** → **Results** → **Attribution** → "
+    "**Report** → **About**."
 )
 st.info(
     "Live GPU inference: SSH tunnel `ssh -L 5001:localhost:5001 user@gpu-host`, "

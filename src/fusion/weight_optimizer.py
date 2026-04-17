@@ -52,4 +52,3 @@ def grid_search_weighted_sum(
         w1 += w1_step
 
     return GridBest(w1=best_w1, w2=best_w2, roc_auc=float(best_auc))
-

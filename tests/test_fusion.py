@@ -32,7 +32,9 @@ def test_lr_path_with_tiny_model() -> None:
     # Train a tiny LR model and write it to a temp file.
     X = np.array([[0.1, 0.1], [0.9, 0.9], [0.2, 0.8], [0.8, 0.2]], dtype=np.float32)
     y = np.array([0, 1, 1, 0], dtype=np.int32)
-    clf = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000, class_weight="balanced"))
+    clf = make_pipeline(
+        StandardScaler(), LogisticRegression(max_iter=1000, class_weight="balanced")
+    )
     clf.fit(X, y)
 
     with tempfile.TemporaryDirectory() as d:
@@ -43,4 +45,3 @@ def test_lr_path_with_tiny_model() -> None:
         assert r.used_fallback is False
         assert 0.0 <= r.fusion_score <= 1.0
         assert r.verdict in ("REAL", "FAKE")
-

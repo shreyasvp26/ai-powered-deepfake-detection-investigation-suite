@@ -36,7 +36,13 @@ def test_pipeline_on_empty_dir_returns_schema() -> None:
         p = Pipeline(device="cpu", cfg=cfg)
         out = p.run_on_crops_dir(d)
         # Required keys for downstream UI work
-        for k in ("verdict", "fusion_score", "spatial_score", "temporal_score", "per_frame_predictions"):
+        for k in (
+            "verdict",
+            "fusion_score",
+            "spatial_score",
+            "temporal_score",
+            "per_frame_predictions",
+        ):
             assert k in out
         assert out["metadata"]["frames_analysed"] == 0
 
@@ -56,4 +62,3 @@ def test_pipeline_fallback_f_lt2_frames() -> None:
         assert out["metadata"]["frames_analysed"] == 1
         assert out["technical"]["used_fallback"] is True
         assert abs(float(out["fusion_score"]) - float(out["spatial_score"])) < 1e-9
-

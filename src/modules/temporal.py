@@ -83,7 +83,7 @@ class TemporalAnalyzer:
 
         if n >= self.window_size:
             ws = self.window_size
-            window_vars = [float(np.var(preds[i:i+ws])) for i in range(n - ws + 1)]
+            window_vars = [float(np.var(preds[i : i + ws])) for i in range(n - ws + 1)]
             max_window_var = max(window_vars) if window_vars else global_variance
         else:
             max_window_var = global_variance

@@ -126,7 +126,9 @@ def main() -> None:
         print("Using synthetic flat JPEGs (split or crops missing / insufficient).")
         crop_dir, video_ids, labels = _make_synthetic_crop_dir(min_rows)
 
-    def _build_loader(cdir: Path, vids: List[str], labs: List[int], syn: bool) -> Tuple[Any, Any, DataLoader]:
+    def _build_loader(
+        cdir: Path, vids: List[str], labs: List[int], syn: bool
+    ) -> Tuple[Any, Any, DataLoader]:
         ds = DSANDataset(
             vids,
             labs,

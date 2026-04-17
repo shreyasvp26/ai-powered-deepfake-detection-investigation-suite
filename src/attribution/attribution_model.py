@@ -12,7 +12,9 @@ from src.attribution.rgb_stream import RGBStream
 
 
 class DSANv3(nn.Module):
-    def __init__(self, num_classes: int = 4, fused_dim: int = 512, *, pretrained: bool = True) -> None:
+    def __init__(
+        self, num_classes: int = 4, fused_dim: int = 512, *, pretrained: bool = True
+    ) -> None:
         super().__init__()
         self.rgb_stream = RGBStream(out_dim=fused_dim, pretrained=pretrained)
         self.freq_stream = FrequencyStream(imagenet_pretrained=pretrained)
@@ -24,7 +26,9 @@ class DSANv3(nn.Module):
     def forward(self, rgb: torch.Tensor, srm: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         srm = srm.to(rgb.device)
         rgb_01 = rgb * self._std + self._mean
-        gray_255 = (0.2989 * rgb_01[:, 0:1] + 0.5870 * rgb_01[:, 1:2] + 0.1140 * rgb_01[:, 2:3]) * 255.0
+        gray_255 = (
+            0.2989 * rgb_01[:, 0:1] + 0.5870 * rgb_01[:, 1:2] + 0.1140 * rgb_01[:, 2:3]
+        ) * 255.0
 
         rgb_feat = self.rgb_stream(rgb)
         freq_feat = self.freq_stream(srm, gray_255)

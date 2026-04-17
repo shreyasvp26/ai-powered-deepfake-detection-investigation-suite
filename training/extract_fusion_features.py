@@ -148,7 +148,9 @@ def iter_examples(
 def main() -> None:
     p = argparse.ArgumentParser(description="Extract fusion features (Ss,Ts) from face crops.")
     p.add_argument("--faces-root", type=Path, required=True, help="e.g. data/processed/faces")
-    p.add_argument("--split-json", type=Path, required=True, help="Fake split JSON (list of [src,tgt]).")
+    p.add_argument(
+        "--split-json", type=Path, required=True, help="Fake split JSON (list of [src,tgt])."
+    )
     p.add_argument(
         "--real-ids-json",
         type=Path,
@@ -185,11 +187,16 @@ def main() -> None:
         default=None,
         help="Path to full_c23.p (default: search under --models-dir).",
     )
-    p.add_argument("--models-dir", type=Path, default=Path("models"), help="Root to search for full_c23.p.")
+    p.add_argument(
+        "--models-dir", type=Path, default=Path("models"), help="Root to search for full_c23.p."
+    )
     p.add_argument(
         "--stub-spatial",
         action="store_true",
-        help="Do not load Xception; generate deterministic pseudo per-frame predictions for dev/testing.",
+        help=(
+            "Do not load Xception; generate deterministic pseudo per-frame predictions "
+            "for dev/testing."
+        ),
     )
     args = p.parse_args()
 
@@ -201,7 +208,10 @@ def main() -> None:
         print("Pass either --manipulation or --all-manipulations.", file=sys.stderr)
         sys.exit(2)
 
-    manipulations: list[Method] = list(METHODS) if args.all_manipulations else [args.manipulation]  # type: ignore[list-item]
+    if args.all_manipulations:
+        manipulations: list[Method] = list(METHODS)
+    else:
+        manipulations = [args.manipulation]  # type: ignore[list-item]
 
     if args.stub_spatial:
         spatial = None
@@ -286,4 +296,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

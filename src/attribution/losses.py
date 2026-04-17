@@ -35,7 +35,9 @@ class SupConLoss(nn.Module):
 
         valid_mask = num_positives > 0
         if valid_mask.sum() == 0:
-            warnings.warn("SupCon: no positive pairs in batch — check StratifiedBatchSampler", stacklevel=2)
+            warnings.warn(
+                "SupCon: no positive pairs in batch — check StratifiedBatchSampler", stacklevel=2
+            )
             return features.sum() * 0.0
         return -mean_log_prob[valid_mask].mean()
 
