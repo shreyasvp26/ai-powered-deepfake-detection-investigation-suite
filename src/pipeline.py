@@ -132,3 +132,106 @@ class Pipeline:
             },
         }
 
+    def run_on_video(
+        self,
+        video_path: str | Path,
+        *,
+        fps_sampling: int | None = None,
+        max_frames: int | None = None,
+        detector_backend: str = "mtcnn",
+    ) -> dict[str, Any]:
+        """Analyze a raw video locally (CPU path; slow).
+
+        Uses MTCNN + IoU tracker + 1.3x margin crops, aligned to plan §5.7 and §13.
+        Multi-face policy: always select the highest-confidence face on (re-)detection frames,
+        then track that face.
+        """
+        if self._spatial is None or self._temporal is None or self._fusion is None or self._inf_cfg is None:
+            self.load_models()
+        assert self._spatial is not None and self._temporal is not None and self._fusion is not None
+
+        import cv2
+
+        from src.preprocessing.face_aligner import FaceAligner
+        from src.preprocessing.face_detector import FaceDetector
+        from src.preprocessing.face_tracker import FaceTracker
+        from src.preprocessing.frame_sampler import FrameSampler
+
+        vpath = Path(video_path).expanduser().resolve()
+        t0 = time.perf_counter()
+
+        cfg_fps = int(self._inf_cfg.get("fps_sampling", 1)) if self._inf_cfg else 1
+        cfg_max = int(self._inf_cfg.get("max_frames", self.cfg.max_frames)) if self._inf_cfg else self.cfg.max_frames
+        fps = int(fps_sampling) if fps_sampling is not None else cfg_fps
+        mf = int(max_frames) if max_frames is not None else cfg_max
+
+        sampler = FrameSampler(fps=fps, max_frames=mf)
+        frames_bgr, meta = sampler.sample(vpath)
+
+        detector = FaceDetector(backend=detector_backend, device=self.device)
+        tracker = FaceTracker(detector=detector)
+        aligner = FaceAligner(output_size=299, margin_factor=1.3)
+
+        def pick_best_box(dets: list[dict]) -> list[int] | None:
+            if not dets:
+                return None
+            best = max(dets, key=lambda d: float(d.get("confidence", 0.0)))
+            return list(map(int, best["box"]))
+
+        crops: list[np.ndarray] = []
+        prev_box: list[int] | None = None
+        for fr in frames_bgr:
+            rgb = cv2.cvtColor(fr, cv2.COLOR_BGR2RGB)
+            if prev_box is None:
+                dets = detector.detect(rgb)
+                box = pick_best_box(dets)
+                if box is None:
+                    continue
+                prev_box = box
+            else:
+                tr = tracker.update(fr, prev_box)
+                if tr.get("tracked"):
+                    prev_box = tr["box"]
+                else:
+                    dets = detector.detect(rgb)
+                    box = pick_best_box(dets)
+                    if box is None:
+                        continue
+                    prev_box = box
+            crops.append(aligner.align(fr, prev_box))
+
+        spatial_out = self._spatial.predict_video(crops)
+        ss = float(spatial_out["spatial_score"])
+        per_frame = [float(x) for x in spatial_out["per_frame_predictions"]]
+        n_frames = int(spatial_out["num_frames"])
+
+        if n_frames >= 2:
+            temporal_out = self._temporal.analyze(per_frame)
+            ts: float | None = float(temporal_out["temporal_score"])
+        else:
+            temporal_out = None
+            ts = None
+
+        fusion_out = self._fusion.predict(ss=ss, ts=ts, n_frames=n_frames)
+        elapsed = time.perf_counter() - t0
+
+        return {
+            "verdict": fusion_out.verdict,
+            "fusion_score": fusion_out.fusion_score,
+            "spatial_score": ss,
+            "temporal_score": ts if ts is not None else "N/A",
+            "per_frame_predictions": per_frame,
+            "metadata": {
+                "video_path": str(vpath),
+                "duration_s": float(meta.get("duration", 0.0)),
+                "fps": float(meta.get("original_fps", 0.0)),
+                "frames_analysed": n_frames,
+                "sampling_fps": fps,
+            },
+            "technical": {
+                "device": self.device,
+                "inference_time_s": float(elapsed),
+                "used_fallback": fusion_out.used_fallback,
+            },
+        }
+
