@@ -3,6 +3,8 @@
 This is the minimal sequence to go from “GPU access granted” to “Phase 5 detection benchmark complete”.
 It mirrors `docs/PROJECT_PLAN_v10.md` Sections 5–9 and Phase checklist §16.
 
+**CPU-only work (no CUDA):** see [WORK_WITHOUT_CUDA.md](WORK_WITHOUT_CUDA.md).
+
 ### 0) One-time environment sanity
 
 - **Activate env**:
