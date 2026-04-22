@@ -4,7 +4,6 @@
 **Date:** April 2026
 **Team Lead:** Shreyas Patil
 **Team:** Shreyas Patil, Om Deshmukh, Ruturaj Challawar, Vinayak Pandalwad, Suparna Joshi
-**Supervisor:** (To be assigned)
 **Project Type:** BTech Major Project
 
 > This is the definitive final version. It merges the structural completeness of v2.2 with
