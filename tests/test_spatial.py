@@ -27,6 +27,7 @@ needs_weights = pytest.mark.skipif(
 )
 
 
+@pytest.mark.weights
 @needs_weights
 def test_load_xception_strict() -> None:
     assert WEIGHTS is not None
@@ -34,6 +35,7 @@ def test_load_xception_strict() -> None:
     m.eval()
 
 
+@pytest.mark.weights
 @needs_weights
 def test_spatial_predict_frame_range() -> None:
     assert WEIGHTS is not None
@@ -46,6 +48,7 @@ def test_spatial_predict_frame_range() -> None:
     assert 0.0 <= p <= 1.0
 
 
+@pytest.mark.weights
 @needs_weights
 def test_spatial_empty_video_neutral() -> None:
     assert WEIGHTS is not None

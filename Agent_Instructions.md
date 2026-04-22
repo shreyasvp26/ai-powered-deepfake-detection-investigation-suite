@@ -28,10 +28,11 @@
 
 ---
 
-## 1. Cardinal rules — 12 non-negotiables
+## 1. Cardinal rules — 13 non-negotiables
 
 You may not violate any of these. If a user instruction appears to require violating them, **stop and ask**; do not silently comply.
 
+0. **FREE-TIER ONLY. ALWAYS. NO EXCEPTIONS.** This is a BTech academic project. Every service, library, SDK, hosting provider, model API, analytics tool, error tracker, GPU, datastore, email sender, or domain add-on must be on a **free / free-tier / self-hostable** plan listed in [`docs/FREE_STACK.md`](docs/FREE_STACK.md). **You are not authorised to add any paid service, paid plan upgrade, payment processor (Stripe / Razorpay / PayPal / anything), Modal / RunPod / Fly GPU, Cloudflare Pro, Vercel Pro, Neon Pro, Upstash Pro, or any code referencing billing, subscriptions, tiers, pricing, invoices, or premium features.** If a task seems to require one, stop and ask the maintainer. If free-tier quotas are approached, the fix is to **tighten rate limits or shed load** — never upgrade. Any PR introducing a paid dependency is automatically rejected.
 1. **Read before writing.** Before editing any file `X`, read `X` fully (or, for very large files, the section you are editing + its siblings). Never edit a file you haven't opened in this session.
 2. **Spec first, code second.** For any new feature or non-trivial refactor: the target is first described in `docs/FEATURES.md` (new row) or `docs/IMPLEMENTATION_PLAN.md` (workstream deliverable). Only then do you implement. If the spec does not exist, write it (in a docs-only PR if the change is large).
 3. **Determinism is mandatory.** Every training / eval / inference entrypoint sets `SEED = 42` and seeds `random`, `numpy.random`, `torch`, and (when used) `torch.cuda`. Grad-CAM heatmaps for the fixtures in `tests/fixtures/crops_demo` must be byte-identical across runs on the same device.
@@ -78,7 +79,7 @@ Do this once at the start of every session. Do **not** skip it because you "alre
 
 ### 2.3 What you do **not** read at session start
 
-- `docs/MASTER_IMPLEMENTATION.md` and the two `PROJECT_PLAN.md` files other than `_v10.md` — these are **historical**. Read them only if you are archaeologising a past decision.
+- `docs/MASTER_IMPLEMENTATION.md` (removed) and any plan copies other than `_v10.md` — treat as **historical**. Use git history only if you are archaeologising a past decision.
 - The `.jpeg` / `.pdf` assets in `docs/` — legacy pitch material, not part of the spec.
 
 ---
@@ -151,9 +152,9 @@ This section gets stale. When you suspect it is wrong, trust the files on disk, 
 
 ### 5.3 What does not exist yet
 
-- **V2 inference API** (`api/` folder). See `docs/ARCHITECTURE.md` § V2 for target structure.
+- **V2 inference API** — `api/` exists as a **scaffold** (V2A-01: `/v1/healthz`, `/v1/jobs` stubs, deps); job upload, worker, and object I/O are still `docs/IMPLEMENTATION_PLAN.md` V2A-02+.
 - **V2 website** (`website/` folder). See `docs/WEBSITE_PLAN.md`.
-- **CI workflow** (`.github/workflows/ci.yml`). (BUG-011, V1F-06.)
+- **CI workflow** — `.github/workflows/ci.yml` exists (V1F-06). **`docker compose`** for local / staging API is in V2A-08 (`docker-compose.yml` at repo root).
 - **Cross-dataset eval** on Celeb-DF / DFDC-preview. (BUG-010, V1F-11.)
 - **Robustness suite** (compression/resize/noise). (V1F-12.)
 
@@ -162,7 +163,9 @@ This section gets stale. When you suspect it is wrong, trust the files on disk, 
 - `src/modules/blink.py` and its training / test / notebook siblings — see rule #8 in §1.
 - MPS (Apple Metal) support — see rule #7 in §1.
 - Any "mobile app" code — V4+, not now.
-- Any payment integration — out of scope for student project.
+- Any payment integration, billing SDK, pricing page, subscription plumbing, paid tier, or premium feature — **permanently out of scope** (see Cardinal Rule #0 and [`docs/FREE_STACK.md`](docs/FREE_STACK.md)).
+- Any paid GPU host (Modal, RunPod, Fly GPU). Use the college L4 (primary) or Kaggle / Colab free notebooks (fallback).
+- Any paid PaaS upgrade (Cloudflare Pro, Vercel Pro, Neon Pro, Upstash Pro, Fly paid machines beyond the Hobby allowance).
 
 ### 5.5 Known live bugs
 

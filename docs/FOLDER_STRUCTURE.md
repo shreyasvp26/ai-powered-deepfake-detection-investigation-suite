@@ -17,6 +17,9 @@
 | `requirements.txt` | Python dependencies (engine + API). Pinned |
 | `setup.py` | Python package setup |
 | `verify_setup.py` | Environment sanity check |
+| `docker-compose.yml` | Local stack: API + worker + Postgres + Redis + MinIO (V2A-08) |
+| `.dockerignore` | Excludes venv, website, `models/`, `data/`, etc. from API image build |
+| `scripts/docker-smoke.sh` | `docker compose` happy path: POST /v1/jobs → poll until `done` |
 | `.pre-commit-config.yaml` | black / isort / flake8 hooks |
 | `.gitignore` | Python, venv, data, models, node_modules, `.env*` |
 | `.flake8` | flake8 config (line length 100) |
@@ -111,6 +114,11 @@ src/
 │   ├── __init__.py
 │   ├── fusion_layer.py               # StandardScaler + LR; F=Ss fallback
 │   └── weight_optimizer.py           # weighted-sum baseline grid
+├── data/                             # *(V1F-12)* cross-dataset loaders (FF++-style crops)
+│   ├── __init__.py
+│   ├── cross_common.py               # split JSON + CROSS_DATASET_SEED
+│   ├── celebdfv2.py                  # CelebDFv2Crops
+│   └── dfdc_preview.py               # DfdcPreviewCrops
 ├── report/
 │   ├── __init__.py
 │   └── report_generator.py           # JSON + PDF; embeds ENGINE_VERSION (V1F-03)
@@ -133,8 +141,8 @@ src/
 | `evaluate_spatial_xception.py` | Spatial-only per-method eval |
 | `evaluate_detection_fusion.py` | Full detection + fusion eval |
 | `profile_dataloader.py` | DataLoader timing |
-| `train_attribution.py` | DSAN v3 training loop (currently dry-run; full loop in V1F-05) |
-| `evaluate_cross_dataset.py` | *(V1F-12, V3S-01)* Celeb-DF / DFDC |
+| `train_attribution.py` | DSAN v3 training loop (V1F-05 scaffold + GPU runbook) |
+| `evaluate_cross_dataset.py` | *(V1F-12, V3S-01)* Celeb-DF / DFDC; ``--cpu-stub`` for plumbing |
 | `visualize_embeddings.py` | *(planned)* t-SNE export (substitute today: `app/sample_results/embeddings_tsne.csv`) |
 
 ---
@@ -170,26 +178,31 @@ app/
 
 ```
 api/
-├── main.py                          # FastAPI app factory
+├── main.py                          # FastAPI app + CORS + request-id
+├── storage.py                       # S3/MinIO wrapper (stub → V2A-06)
+├── security.py                      # Auth deps (no-op in V2-alpha)
+├── telemetry.py                     # logging + X-Request-ID middleware
+├── worker.py                        # RQ entry (stub); consumer runs src.pipeline
+├── deps/                            # settings, DB session, Redis client, storage
+├── db/                              # SQLAlchemy Base + ``Job`` model (V2A-02+)
+├── jobs/                            # enqueue helper (RQ vs inline)
+├── tasks/                           # ``run_job`` for RQ worker
+├── validation/                      # upload size / magic / duration (ffprobe)
+├── schemas/                         # Pydantic v2 (analysis + jobs responses)
 ├── routers/
-│   ├── analyses.py                  # POST / GET /analyses
-│   ├── auth.py                      # signup / OTP / signin / refresh
-│   ├── me.py                        # GET /me, export, delete
-│   ├── admin.py                     # users / analyses / abuse / invites
-│   └── webhooks.py                  # Stripe / Razorpay
-├── schemas/                         # Pydantic v2
-├── models/                          # SQLAlchemy 2.x
-├── services/                        # Business logic (enqueue, invoice, abuse)
-├── deps/                            # Dependency injection
-├── security.py                      # JWT / cookies / rate limits
-├── telemetry.py                     # OpenTelemetry setup
-├── worker.py                        # RQ consumer runs src.pipeline
-├── alembic/                         # Migrations
-├── tests/
-├── Dockerfile
-├── docker-compose.yml               # api + worker + postgres + redis + minio
-├── requirements.txt
-└── openapi.json                     # committed snapshot (consumed by website)
+│   ├── health.py                    # /v1/healthz*, live + ready
+│   ├── jobs.py                      # /v1/jobs* (V2A-02+)
+│   ├── auth.py                      # *(planned)* signup / OTP / signin
+│   ├── me.py                        # *(planned)*
+│   ├── admin.py                     # *(planned)*
+│   └── webhooks.py                  # *(planned)*
+├── services/                        # *(planned)* enqueue, abuse-moderation (no billing/invoice — free-tier project)
+├── models/                          # *(planned)* SQLAlchemy 2.x
+├── tests/                           # e.g. test_health (TestClient + fakeredis + SQLite)
+├── Dockerfile                       # slim API + worker image (see requirements-docker.txt)
+├── requirements-docker.txt         # no PyTorch; used by Dockerfile
+├── alembic/                         # *(planned)* Migrations
+└── openapi.json                     # V2A-09: committed OpenAPI JSON (`scripts/export_openapi.py`); checked in CI
 ```
 
 ---
@@ -291,4 +304,4 @@ Exploratory. `01`–`03` exist; `04`–`08` were planned alongside Blink (`04_bl
 ## Deprecation notes
 
 - Blink module (`src/modules/blink.py`, `training/train_blink_classifier.py`, `tests/test_blink.py`, `notebooks/04_blink_detection.ipynb`) — **not created**. Feature F003 is dropped; rationale in `docs/RESEARCH.md`.
-- `docs/MASTER_IMPLEMENTATION.md` — **does not exist**. Any reference to it is stale and must be replaced with `docs/PROJECT_PLAN.md` + `docs/IMPLEMENTATION_PLAN.md` (BUG-008).
+- `docs/MASTER_IMPLEMENTATION.md` — **archived/removed** (use git history if you need archaeology). Any reference to it is stale; use `docs/PROJECT_PLAN.md` + `docs/IMPLEMENTATION_PLAN.md` instead (BUG-008).

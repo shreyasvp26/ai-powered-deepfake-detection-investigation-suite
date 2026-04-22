@@ -28,6 +28,7 @@ needs_weights = pytest.mark.skipif(
 )
 
 
+@pytest.mark.weights
 @needs_weights
 def test_pipeline_on_empty_dir_returns_schema() -> None:
     assert WEIGHTS is not None
@@ -47,6 +48,7 @@ def test_pipeline_on_empty_dir_returns_schema() -> None:
         assert out["metadata"]["frames_analysed"] == 0
 
 
+@pytest.mark.weights
 @needs_weights
 def test_pipeline_fallback_f_lt2_frames() -> None:
     assert WEIGHTS is not None

@@ -3,7 +3,6 @@
 Scripts referenced in PROJECT_PLAN_v10.md Section 14:
 
 - `train_attribution.py` — DSAN v3 training entrypoint; use `--dry-run` locally (see `configs/train_config.yaml`, gradient accumulation honoured in dry-run loss scaling)
-- `train_blink_classifier.py` — deprecated blink XGBoost reference (if present)
 - `extract_fusion_features.py` — build `[Ss, Ts]` arrays for fusion LR (`--stub-spatial` for CPU dev)
 - `fit_fusion_lr.py` — fit `StandardScaler` + `LogisticRegression`
 - `optimize_fusion.py` — weighted-sum grid search baseline

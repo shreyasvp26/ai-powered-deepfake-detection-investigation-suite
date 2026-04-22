@@ -16,10 +16,16 @@ st.markdown(
 This dashboard follows the architecture in **PROJECT_PLAN_v10.md** (detection + temporal + fusion;
 attribution DSAN v3; optional Grad-CAM++).
 
-### Blink detection (deprecated)
+### Blink detection (dropped)
 
-The legacy blink-based signal (**Bs**) is **not** used in production fusion (`use_blink: false`).
-It may be discussed here for methodology transparency only; reports and fusion omit **Bs** (FIX-9).
+Blink-rate analysis was evaluated and then **dropped** (not implemented in this repo, not used in
+fusion or reports). Rationale (RF3):
+
+- **H.264 compression + low FPS sampling** makes EAR traces noisy and blink events unreliable.
+- **Temporal variance already captures most of the signal** the blink heuristic was trying to add.
+
+The inference config keeps `use_blink: false` as a legacy guardrail, but the engine output contract
+excludes any blink fields (FIX-9).
 
 ### Inference
 

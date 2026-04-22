@@ -1,6 +1,9 @@
 """Forensic analysis reports: JSON + PDF (fpdf2).
 
 FIX-9: blink score (Bs) is deprecated and must not appear in any report output.
+
+V1F-03: every JSON report includes ``engine_version``, ``input_sha256``,
+``model_checksums``, and ``seed``.
 """
 
 from __future__ import annotations
@@ -13,11 +16,33 @@ from typing import Any
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
+from src import ENGINE_VERSION
+from src.report.checksums import build_model_checksums, resolve_input_sha256
+
 _DEPRECATED_TOP_LEVEL = frozenset({"blink_score", "blink", "Bs", "bs"})
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _json_default(o: Any) -> str:
     return str(o)
+
+
+def _resolve_seed(data: dict[str, Any]) -> int:
+    raw = data.get("seed")
+    if raw is not None:
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            pass
+    for block in ("metadata", "technical"):
+        b = data.get(block)
+        if isinstance(b, dict) and "seed" in b:
+            try:
+                return int(b["seed"])
+            except (TypeError, ValueError):
+                pass
+    return 42
 
 
 class ReportGenerator:
@@ -37,6 +62,12 @@ class ReportGenerator:
         payload = {k: v for k, v in analysis_result.items() if k not in _DEPRECATED_TOP_LEVEL}
         if "timestamp" not in payload:
             payload["timestamp"] = datetime.now().isoformat(timespec="seconds")
+
+        models_dir = _REPO_ROOT / "models"
+        payload["engine_version"] = ENGINE_VERSION
+        payload["input_sha256"] = resolve_input_sha256(payload)
+        payload["model_checksums"] = build_model_checksums(models_dir)
+        payload["seed"] = _resolve_seed(payload)
 
         with json_path.open("w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, default=_json_default, ensure_ascii=False)
@@ -136,5 +167,19 @@ class ReportGenerator:
         if isinstance(tech, dict):
             for key, val in tech.items():
                 pdf.cell(0, 7, f"  {key}: {val}", new_x=nx, new_y=ny)
+
+        pdf.ln(6)
+        pdf.set_font("Helvetica", "I", 8)
+        eng = str(result.get("engine_version", ""))
+        inh = str(result.get("input_sha256", ""))
+        trunc = f"{inh[:16]}..." if len(inh) > 16 else inh
+        pdf.cell(
+            0,
+            5,
+            f"Engine {eng} | input_sha256: {trunc}",
+            new_x=nx,
+            new_y=ny,
+            align="C",
+        )
 
         pdf.output(pdf_path)

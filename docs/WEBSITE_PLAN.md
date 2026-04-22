@@ -1,7 +1,9 @@
 # Website Plan — Next.js 15 public site (V2)
 
 > Primary user surface for the DeepFake Detection & Investigation Suite.
-> Pairs with: [`VISION.md`](VISION.md), [`ARCHITECTURE.md`](ARCHITECTURE.md), [`REQUIREMENTS.md`](REQUIREMENTS.md), [`ROADMAP.md`](ROADMAP.md).
+> Pairs with: [`VISION.md`](VISION.md), [`ARCHITECTURE.md`](ARCHITECTURE.md), [`REQUIREMENTS.md`](REQUIREMENTS.md), [`ROADMAP.md`](ROADMAP.md), [`FREE_STACK.md`](FREE_STACK.md).
+>
+> **Free-tier discipline.** Every service named below must stay on a free / free-tier / self-hosted plan. **No payments, no subscriptions, no premium tier, no `/pricing` page, no Stripe, no Razorpay — ever.** BTech academic project.
 
 ---
 
@@ -37,9 +39,9 @@ Non-goals (V2):
 | Charts | **Recharts** | Simple line/bar; bundled small |
 | PDF preview | Lazy-loaded `<iframe>` pointing at API `.../report.pdf` | Zero JS PDF lib |
 | i18n (V3) | **next-intl** | EN / HI / MR at launch |
-| Analytics | **Plausible** (self-hosted or hosted) | Privacy-friendly, DPDP-safe |
-| Errors | **Sentry** | Standard |
-| Deploy | **Vercel** (or Cloudflare Pages if cost requires) | PR previews |
+| Analytics | **Umami** (self-hosted on Vercel Hobby — free) | Privacy-friendly, DPDP-safe; stays free at our volume |
+| Errors | **Sentry — free Developer plan (5 k events/mo)** | Standard; sample aggressively to stay under quota |
+| Deploy | **Vercel Hobby (free)** primary; **Cloudflare Pages (free)** as fallback | PR previews on either |
 | E2E | **Playwright** | Matches Jyotish AI pattern |
 | Unit | **Vitest** + **React Testing Library** | Fast |
 | Lint | **ESLint** (Next config) + **Prettier** | Single source of truth for style |
@@ -68,7 +70,7 @@ Package manager: **pnpm**. Node 20 LTS pinned in `.nvmrc`.
 
 | Route | Purpose |
 |-------|---------|
-| `/signup` | Email (+ optional phone OTP) signup; invite code gate in V2-beta |
+| `/signup` | Email magic-link signup (no phone / SMS — all SMS providers are paid); invite code gate in V2-beta |
 | `/signup/verify` | OTP entry |
 | `/signin` | Magic-link sign-in |
 | `/onboarding` | One-screen: accept terms + consent scope + pick default language |
@@ -83,16 +85,17 @@ Package manager: **pnpm**. Node 20 LTS pinned in `.nvmrc`.
 | `/analyses/[id]` | Results page (verdict gauge, per-frame plot, heatmaps, method-bar, PDF button) |
 | `/analyses/[id]/report.pdf` | Redirect → API pre-signed URL |
 | `/settings/profile` | Name, email, language |
-| `/settings/billing` | Tier, invoices, cancel subscription |
 | `/settings/security` | Active sessions, 2FA (V3+) |
 | `/settings/data` | Export + delete my data (DPDP) |
+
+> **`/settings/billing` was removed on the free-tier pivot.** Single free tier only; nothing to bill, nothing to cancel.
 
 ### 3.4 Admin (role-gated)
 
 | Route | Purpose |
 |-------|---------|
 | `/admin` | Dashboard: DAU, queue depth, error rate |
-| `/admin/users` | User list, tier, activity |
+| `/admin/users` | User list, activity, role, ban/unban |
 | `/admin/analyses` | Global analysis queue with status filters |
 | `/admin/abuse` | Reported content review |
 | `/admin/invites` | Generate / revoke invite codes (V2-beta) |
@@ -118,16 +121,16 @@ Latency target: ≤ 1 s (canned). The demo never calls the inference worker.
 
 ```
 /analyses/new
-  →  drag file (MP4 / MOV / AVI) up to tier limit (100 MB free / 500 MB Pro / 2 GB Elite)
+  →  drag file (MP4 / MOV / AVI) up to the single free-tier limit (100 MB, 60 s)
   →  client validates (MIME, size, length via browser API)
-  →  POST /analyses  (multipart) with auth cookie
+  →  POST /v1/jobs  (FastAPI) (multipart) with auth cookie
   ←  202 { id, status: "queued" }
   →  router.replace(`/analyses/${id}`)
   (page renders skeleton + "Queued — expected ~30 s")
-  →  SWR polls GET /analyses/{id} every 2 s
+  →  SWR polls GET /v1/jobs/{id} every 2 s
   ←  status → "running" → "done" (or "failed")
   →  render Results
-  →  "Download PDF" calls GET /analyses/{id}/report.pdf
+  →  "Download PDF" calls GET /v1/jobs/{id}/report.pdf
 ```
 
 Status tokens for UI:
@@ -146,13 +149,13 @@ Route: `/analyses/[id]/report.pdf` is a thin server handler that redirects to a 
 ```
 /signup
   →  enter email + invite code
-  →  POST /api/auth/signup/otp  →  Resend email via Resend/SendGrid
-  →  /signup/verify (enter 6-digit OTP)
+  →  POST /api/auth/signup/magic-link  →  magic-link email via Resend (free) or Brevo (free)
+  →  click link in email (single-use, 15 min TTL)
   →  /onboarding (accept terms, set consent scope, pick language)
   →  /dashboard
 ```
 
-V2-launch removes the invite-code gate; pricing page opens sign-up directly.
+V2-launch removes the invite-code gate; **sign-up remains free and tier-less**. There is no pricing page.
 
 ---
 
@@ -220,7 +223,7 @@ Built on shadcn/ui + Radix:
 - `sitemap.xml` auto-generated via `next-sitemap`; `robots.txt` authored.
 - OpenGraph + Twitter card images per marketing page (generated once, stored in `website/public/og/`).
 - `next/font` to inline critical font for LCP.
-- No external tracker on public pages (Plausible only).
+- No external tracker on public pages (**Umami self-hosted** only, first-party domain).
 
 ---
 
@@ -255,7 +258,7 @@ See [`SECURITY.md`](../SECURITY.md) for the root policy. Website specifics:
 - Rate limit on `/api/auth/*` and `/api/demo/*`.
 - Bot protection on signup (Cloudflare Turnstile).
 - Content upload: client-side size + MIME check; server-side re-check and magic-byte sniff.
-- Uploaded videos stored in an S3 bucket with **private** ACL, pre-signed download URLs only, and a **24-hour lifecycle delete** for free-tier content.
+- Uploaded videos stored in a private S3-compatible bucket (**Cloudflare R2 free 10 GB** or **Backblaze B2 free 10 GB**; MinIO on the L4 box in dev) with **private** ACL, pre-signed download URLs only, and a **24-hour lifecycle delete** for every upload (single free tier).
 
 ---
 
@@ -335,20 +338,20 @@ Before flipping open signups (V2-launch):
 - [ ] Consent banner (DPDP + cookie).
 - [ ] `/demo` works without JS (server-rendered sample JSON → HTML).
 - [ ] All 4 verdict states (REAL, FAKE-high, FAKE-uncertain, N/A-no-face) render correctly on `/analyses/[id]`.
-- [ ] Stripe + Razorpay live keys rotated from test keys.
 - [ ] DPDP data export + delete endpoints tested end-to-end.
-- [ ] Sentry + Plausible instrumentation visible in respective dashboards.
-- [ ] Rate limits enforced on `/api/auth/*` and `/api/demo/*`.
-- [ ] Uptime monitor (UptimeRobot / BetterStack) configured.
-- [ ] `status.<domain>` page live.
+- [ ] Sentry (free) + Umami (self-hosted) instrumentation visible in respective dashboards.
+- [ ] Rate limits enforced on `/api/auth/*`, `/api/demo/*`, and `POST /v1/jobs` (3/h/IP anonymous, 10/h authenticated).
+- [ ] Uptime monitor (**UptimeRobot free, 50 monitors**) configured.
+- [ ] `status.<domain>` page live (**Instatus free** or static Next.js page reading `/v1/healthz`).
 - [ ] Audit log writes when admin views a user's analysis.
+- [ ] CI grep-gate passes: `rg -n "stripe\|razorpay\|pricing\|upgrade\|premium" website/` returns 0 hits (V2L-08).
 
 ---
 
 ## 13. Open questions (to resolve before V2-beta)
 
-- Single region (Bombay / Mumbai `ap-south-1`) or multi-region? Start single; add CloudFront / Cloudflare cache for assets.
-- Host Postgres on Neon (free) or Supabase? Start Neon; switch if we need Supabase realtime.
-- Storage: Cloudflare R2 (no egress fees) vs Backblaze B2 vs self-hosted MinIO? Start R2 for public previews, MinIO on the L4 box for private uploads.
-- Inference host: Modal (on-demand GPU), RunPod (cheaper sustained), or own L4 box with Fly.io Machines GPU tier? Start own box behind a reverse proxy; revisit at 50 DAU.
-- Free-tier clip length cap: 15 s or 30 s? Start 15 s; expand based on observed p95.
+- Single region (Bombay / Mumbai `ap-south-1`) or multi-region? Start single; Cloudflare free CDN sits in front of Vercel Hobby automatically.
+- Host Postgres on **Neon free** or **Supabase free**? Start Neon (simpler, no realtime needed).
+- Storage: **Cloudflare R2 free 10 GB** (no egress fees) vs **Backblaze B2 free 10 GB**? Start R2 for public previews, MinIO on the college L4 box for private uploads.
+- Inference host: **college L4 box** is the primary path. Documented free fallback for anyone without L4 access: **Kaggle free notebooks** (P100/T4, ~30 h/week) for batch, **Google Colab T4** (session-limited) for demos. **No paid GPU hosts (Modal / RunPod / Fly GPU) are permitted.**
+- Free-tier clip length cap: 15 s or 30 s? Start 15 s; expand based on observed p95 but never beyond 60 s (NFR-05).

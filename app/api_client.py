@@ -50,7 +50,7 @@ def load_bundled_sample_result() -> dict[str, Any]:
 
 
 def mock_analysis_result() -> dict[str, Any]:
-    """Offline payload matching the pipeline JSON shape (no Bs).
+    """Offline payload matching the pipeline JSON shape (no blink fields).
 
     Same as bundled file when present.
     """

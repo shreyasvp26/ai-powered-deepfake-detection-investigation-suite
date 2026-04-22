@@ -1,0 +1,102 @@
+# V2A-08 — local full stack: API + RQ worker + Postgres + Redis + MinIO (mock engine, no GPU).
+# Usage: `docker compose up --build` then `./scripts/docker-smoke.sh` or the curl in docs/ADMIN.md.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: deepfake
+      POSTGRES_PASSWORD: deepfake
+      POSTGRES_DB: deepfake
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deepfake -d deepfake"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminsecret
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      sleep 6
+      && mc alias set local http://minio:9000 minioadmin minioadminsecret
+      && mc mb local/analyses --ignore-existing
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment: &app_env
+      DATABASE_URL: postgresql+psycopg2://deepfake:deepfake@postgres:5432/deepfake
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadminsecret
+      S3_BUCKET: analyses
+      S3_USE_SSL: "false"
+      MOCK_ENGINE: "1"
+      SYNC_RQ: "0"
+      GIT_SHA: docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/v1/healthz/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 25s
+
+  worker:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    command: ["python", "-m", "api.worker"]
+    environment: *app_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  minio_data:

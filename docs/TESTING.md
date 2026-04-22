@@ -19,11 +19,15 @@
 | **Cross-dataset** | Celeb-DF v2, DFDC preview | scripted job | GPU |
 | **Load** | 50 concurrent uploads on staging | `oha` / `k6` | Staging |
 
+`api/tests/` (V2A-01+): `pytest api/tests/ -q` — TestClient, `fakeredis` for Redis, `SYNC_RQ=1` + in-memory SQLite (`StaticPool`), `MOCK_ENGINE=1`, `LOCAL_STORAGE_PATH` temp, mocked `probe_video_duration_sec` in `conftest`. Coverage: `test_healthz.py` (`/v1/healthz*`, `/v1/livez`, `/v1/readyz`), `test_jobs_post.py` / `test_jobs_get.py` / `test_jobs_report_pdf.py` (happy + validation + 404/409/422). V2A-10: `test_integration_httpx_job_flow.py` — `httpx.AsyncClient` + `ASGITransport` end-to-end (marker `integration_httpx`); `scripts/docker-smoke.sh` is exercised by the **`docker-compose-smoke`** CI job.
+
 ---
 
 ## 2. Methodology (how numbers are produced)
 
-### 2.1 Seeding
+### 2.1 Seeding (SEED = 42)
+
+Project policy: **`SEED = 42`** for training, evaluation scripts, and reproducible demos (`random.seed`, `numpy.random.seed`, `torch.manual_seed`, `torch.cuda.manual_seed_all` where applicable).
 
 ```python
 torch.manual_seed(42)
@@ -34,11 +38,15 @@ torch.use_deterministic_algorithms(False)   # full determinism on CNNs not requi
 
 For the determinism fixture test (byte-identical JSON), we set `torch.use_deterministic_algorithms(True)` and pin `CUBLAS_WORKSPACE_CONFIG=:4096:8`.
 
-### 2.2 Data splits
+### 2.2 Identity-safe split JSON paths
 
-- Train / val / test are **identity-safe** (`training/split_by_identity.py`): no source identity appears across splits.
-- Split JSONs are committed: `data/splits/{train,val,test}_identity_safe.json` + `data/splits/real_source_ids_identity_safe.json`.
-- Cross-dataset: a fixed 100-video slice per external dataset (committed as `data/splits/celebdfv2_smoke.json`, `data/splits/dfdc_preview_smoke.json`).
+- Splits are generated with `training/split_by_identity.py` (no source identity appears across train / val / test).
+- **Committed JSON paths** (also referenced from `configs/train_config.yaml` under `attribution.data`):
+  - `data/splits/train_identity_safe.json`
+  - `data/splits/val_identity_safe.json`
+  - `data/splits/test_identity_safe.json`
+  - `data/splits/real_source_ids_identity_safe.json`
+- **Cross-dataset** smoke lists (100 videos each when fully populated; placeholder rows until the L4 run): `data/splits/celebdfv2_smoke.json`, `data/splits/dfdc_preview_smoke.json`. Loaders: `src/data/celebdfv2.py`, `src/data/dfdc_preview.py`; script: `training/evaluate_cross_dataset.py`.
 
 ### 2.3 Detection metrics (FF++ c23 identity-safe test)
 
@@ -46,13 +54,14 @@ For the determinism fixture test (byte-identical JSON), we set `torch.use_determ
 - `Ts` per video = `TemporalAnalyzer.analyze(...)["temporal_score"]`.
 - `F` = `FusionLayer.predict(Ss, Ts).fusion_score`.
 - AUC: `sklearn.metrics.roc_auc_score(y_true, F)`.
-- Threshold: Youden-J (`argmax TPR − FPR`) on the **val** split; applied unchanged to test.
-- Accuracy / Precision / Recall / F1: at that threshold.
+- **Threshold:** Youden-J (`argmax` of `TPR − FPR`) computed on the **val** split; the same scalar threshold is applied unchanged to **test** (no test-set tuning).
+- **Accuracy / precision / recall / F1:** all computed **at that Youden-J threshold** on the reported split (not at a separate F1-optimal threshold).
 
 ### 2.4 Attribution metrics (DSAN v3, fake-only)
 
-- Top-1 accuracy + macro-F1 computed from `sklearn.metrics.classification_report`.
-- Per-class accuracy: diagonal of confusion matrix, saved as `outputs/benchmarks/confusion.png`.
+- **Primary tool:** `sklearn.metrics.classification_report(y_true, y_pred, labels=..., output_dict=True)` on the 4 fake method classes.
+- **Macro F1** = `output_dict["macro avg"]["f1-score"]`; **per-class** precision/recall/F1 from each label’s entry; overall top-1 accuracy from correct predictions / total.
+- Confusion matrix (optional diagnostic) saved as `outputs/benchmarks/confusion.png` (diagonal ≈ per-class accuracy for balanced eval).
 
 ### 2.5 Ablation
 
@@ -71,7 +80,7 @@ For the determinism fixture test (byte-identical JSON), we set `torch.use_determ
   - Gaussian blur σ = 1.5
   - Resize to 144 px then back up
   - Rotation 90° / 180°
-- Delta vs clean AUC recorded.
+- Delta vs clean AUC recorded (see §7; **V1F-11** GPU benchmark).
 
 ### 2.8 Inference timing
 
@@ -79,11 +88,27 @@ For the determinism fixture test (byte-identical JSON), we set `torch.use_determ
 - Three runs per scenario; median reported; min / max disclosed.
 - Warmup: one discarded run before timing (loads CUDA kernels).
 
-### 2.9 Regeneration
+### 2.9 Weights & Biases (per-run naming)
 
-`scripts/report_testing_md.py` (to be created, V1F-08) reads W&B run IDs from `scripts/wandb_runs.json` and replaces the tables below in-place, so this file stays in sync with the ground truth.
+- **Project:** set `WANDB_PROJECT` (e.g. `deepfake-v1-fix` or a dedicated `…-bench` suffix for benchmark runs). Training uses the same variable as `training/train_attribution.py` / your shell.
+- **Run display name:** `{engine_version or short git sha}-{section}-{YYYYMMDD}` (example: `v10.2.0-attribution-20260422`) so runs sort and de-duplicate in the UI.
+- **Manifest / export:** when pulling metrics into docs, record the full W&B path `entity/project/run_id` (from the run URL) in your YAML or spreadsheet; `scripts/report_testing_md.py` consumes a **structured YAML** (`--data` or `--dry-run` fixture) so CI never needs API keys.
+
+### 2.10 Regeneration of Results tables
+
+```bash
+# CI-safe: refresh auto block from bundled fixture (no W&B)
+python scripts/report_testing_md.py --dry-run
+
+# Local: point at a YAML you exported from W&B summaries or filled by hand
+python scripts/report_testing_md.py --data path/to/metrics.yaml
+```
+
+Tables between `<!-- auto:results:start -->` and `<!-- auto:results:end -->` (§3–§7) are overwritten by that script. Do not hand-edit inside the markers after a regen.
 
 ---
+
+<!-- auto:results:start -->
 
 ## 3. Results — detection (FF++ c23 identity-safe test)
 
@@ -128,24 +153,28 @@ For the determinism fixture test (byte-identical JSON), we set `torch.use_determ
 
 | Dataset | Slice | AUC | Δ vs FF++ c23 | Notes |
 |---------|-------|-----|---------------|-------|
-| Celeb-DF v2 smoke | 100 videos | TBD | TBD | Expected large drop |
-| DFDC preview smoke | 100 videos | TBD | TBD | Expected large drop |
+| Celeb-DF v2 smoke | 100 videos | TBD | TBD | TBD (V1F-12 GPU run); see ``training/evaluate_cross_dataset.py`` |
+| DFDC preview smoke | 100 videos | TBD | TBD | TBD (V1F-12 GPU run); see ``training/evaluate_cross_dataset.py`` |
 
-Published to the public About page once filled.
+*CPU stub only:* ``python training/evaluate_cross_dataset.py --dataset {celebdfv2,dfdc_preview} --cpu-stub`` (no AUC). Published to the public About page once GPU numbers are filled.
 
 ---
 
 ## 7. Robustness
 
 | Perturbation | AUC | Δ vs clean |
-|-------------|-----|-----------|
+|-------------|-----|------------|
 | JPEG-40 | TBD | TBD |
 | Gaussian blur σ=1.5 | TBD | TBD |
 | Resize 144 px | TBD | TBD |
 | Rotation 90° | TBD | TBD |
 | Rotation 180° | TBD | TBD |
 
+*Real AUC/Δ: **TBD (V1F-11 GPU run)**. `training/evaluate_robustness.py` with `--device cpu` is stub/plumbing only.*
+
 ---
+
+<!-- auto:results:end -->
 
 ## 8. Inference timing
 

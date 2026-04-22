@@ -20,4 +20,4 @@ def test_bundled_sample_json_exists() -> None:
 
     data = load_bundled_sample_result()
     assert data.get("verdict") in ("REAL", "FAKE")
-    assert "blink_score" not in data and "Bs" not in data
+    assert "blink_score" not in data

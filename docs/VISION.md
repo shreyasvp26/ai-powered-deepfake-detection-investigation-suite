@@ -1,6 +1,8 @@
 # Vision — DeepFake Detection & Investigation Suite
 
 > North star of the project. Every feature, doc, and code change must defend the claims made here.
+>
+> **This is a BTech academic project. It runs entirely on free-tier services. No payments, no subscriptions, no premium tier — ever.** See [`FREE_STACK.md`](FREE_STACK.md) for the approved services and the upgrade-refusal policy.
 
 ---
 
@@ -44,11 +46,13 @@ We are not building a magic truth-detector. We are building a **convergent evide
 
 ## 4. Who we are building for
 
-| Tier | Persona | Primary need |
-|------|---------|-------------|
-| Public (anonymous) | Curious student, journalist's intern | Upload a short clip, get a verdict + evidence within 30 s |
-| Signed-in user | Journalist, moderator, content reviewer | Upload history, downloadable PDF reports, run up to *N* analyses per day |
-| Investigator (paid / research) | Fact-checker org, academic | Batch upload, API access, longer videos, exportable evidence bundle |
+Every user below accesses the **same single free tier**. There is no paid or premium access path.
+
+| Audience | Persona | Primary need |
+|----------|---------|--------------|
+| Public (anonymous) | Curious student, journalist's intern | Try the bundled demo, read the results |
+| Signed-in user (free) | Journalist, moderator, content reviewer, student | Upload short clips, upload history, downloadable PDF reports, rate-limited (3/h anon, 10/h auth) |
+| Academic collaborator (free, invite-code) | Fact-checker org, academic | Higher per-day rate limit via invite code (still free); batch-upload endpoint at V4 |
 | Admin (us) | Project owner + maintainers | Dataset health, model versions, queue status, abuse review |
 | Researcher (us) | Cohort validation | Streamlit console, raw per-frame JSON, ablation dashboards |
 
@@ -57,10 +61,10 @@ We are not building a magic truth-detector. We are building a **convergent evide
 ## 5. What the user experiences
 
 1. **Landing page.** Clear value proposition, live demo with a bundled sample, "How it works" (one diagram, no jargon), legal disclaimer.
-2. **Upload.** Drag-and-drop a video (≤ 100 MB for free tier). A 30 s server-side budget; longer jobs go to a queue and surface progress.
+2. **Upload.** Drag-and-drop a video (≤ 100 MB, ≤ 60 s — single free-tier limit). A 30 s server-side budget; longer jobs go to a queue and surface progress.
 3. **Results page.** Verdict card (colour-coded, confidence band), per-frame score line, manipulation-method bar chart (if FAKE), two Grad-CAM tiles (spatial + frequency), and a "Download PDF" button.
 4. **Report.** A deterministic, paginated PDF: metadata, scores, heatmaps, caveats, engine version — the kind of artefact that could be attached to a ticket or a story.
-5. **History.** Past analyses indexed by upload time, with the ability to re-open any report. Free tier retains 7 days.
+5. **History.** Past analyses indexed by upload time, with the ability to re-open any report. **All uploads auto-delete after 24 h** (DR-05); report JSON/PDF mirrors that TTL.
 
 ---
 
@@ -84,7 +88,7 @@ We are not building a magic truth-detector. We are building a **convergent evide
 | V1 | p95 inference latency with dual Grad-CAM on 3 frames | ≤ 5 s |
 | V2 (website live) | Public Lighthouse performance | ≥ 90 |
 | V2 | WCAG 2.1 AA on all public pages | Pass |
-| V3 (scale) | Free-tier LCP on 4G | ≤ 2.5 s |
+| V3 (scale) | Public-homepage LCP on 4G | ≤ 2.5 s |
 | V3 | System uptime excluding scheduled maintenance | ≥ 99 % |
 | V3 | Cross-dataset generalisation drop (FF++ → Celeb-DF v2) | ≤ 15 pp AUC drop (reported honestly) |
 
@@ -98,14 +102,16 @@ We are not building a magic truth-detector. We are building a **convergent evide
 - **No** audio-only analysis in V1. Audio-visual fusion is a V3 stretch goal.
 - **No** training on user uploads. Ever.
 - **No** mobile app in V1 or V2. Capacitor wrap is V3+.
-- **No** Docker / Kubernetes orchestration unless hosting clearly requires it (student-scale deployment targets Fly.io / Railway / Modal).
+- **No** Docker / Kubernetes orchestration unless hosting clearly requires it. Student-scale deployment targets **college L4 box + Vercel Hobby + Render/Fly free + Cloudflare free** — nothing paid.
 - **No** claims of 100 % accuracy anywhere in UI, marketing, or docs.
+- **No** payments, subscriptions, paid tiers, Stripe, Razorpay, or any billed service. Permanently out of scope. See [`FREE_STACK.md`](FREE_STACK.md).
+- **No** Modal / RunPod / Fly GPU / any paid GPU. We use the college L4 (primary) and Kaggle free notebooks (fallback).
 
 ---
 
 ## 9. Failure modes we accept and document
 
-- **Unseen manipulation method**: GAN-only face-swap on in-the-wild data may produce weak signals. We report the calibration tier honestly.
+- **Unseen manipulation method**: GAN-only face-swap on in-the-wild data may produce weak signals. We report the calibration band honestly.
 - **Heavy compression (FF++ c40)**: detection AUC drops. We surface this in the About page.
 - **Low-resolution faces**: a face-quality gate will reject / warn under a minimum bounding-box size.
 - **No face detected**: pipeline returns `N/A` verdict with a clear explanation, not a silent 0.5.

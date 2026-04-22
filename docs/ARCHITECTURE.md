@@ -33,8 +33,8 @@ PREPROCESSING (src/preprocessing/)
     │
     ├────────────────────┬────────────────────┐
     ▼                    ▼                    ▼
-MODULE 1            MODULE 2             MODULE 3 (deprecated)
-Spatial             Temporal             Blink (reference only)
+MODULE 1            MODULE 2
+Spatial             Temporal
 (XceptionNet)       (4-feature)
     │                    │
     ▼                    ▼
@@ -119,12 +119,15 @@ V2 extends this (see §3.4).
  │     Vercel (Edge)    │                  │     FastAPI          │
  │     Next.js 15       │◀────HTTPS────────│     (Uvicorn)        │
  │  - Marketing pages   │                  │  Routes:             │
- │  - Dashboard         │                  │   POST /analyses     │
- │  - /analyses/[id]    │                  │   GET  /analyses/{id}│
- │  - Admin             │                  │   GET  /health       │
+ │  - Dashboard         │                  │   POST /v1/jobs      │
+ │  - /analyses/[id]    │                  │   GET  /v1/jobs/{id} │
+ │  - Admin             │                  │   GET  /v1/healthz   │
  │  - Auth (NextAuth)   │                  │   GET  /me/export    │
  └──────────┬───────────┘                  │   DELETE /me         │
-            │                              │   POST /webhooks/*   │
+            │                              │                      │
+            │                              │   (no payment        │
+            │                              │    webhooks — free   │
+            │                              │    tier only)        │
             │                              └──────────┬───────────┘
             │                                         │
             │                                         │ enqueue
@@ -145,34 +148,34 @@ V2 extends this (see §3.4).
             │                                  └──────────────────┘
             │                                           │
  ┌──────────▼───────────┐                      ┌────────▼───────────┐
- │  Postgres (Neon)     │                      │ Object Storage     │
+ │ Postgres (Neon free) │                      │ Object Storage     │
  │   users              │                      │ (Cloudflare R2 /   │
- │   analyses           │                      │  MinIO)            │
- │   subscriptions      │                      │   videos (private) │
- │   audit_log          │                      │   reports (pdf)    │
- │   invite_codes       │                      │   heatmaps (png)   │
- │   abuse_reports      │                      └────────────────────┘
- └──────────────────────┘
+ │   analyses           │                      │  Backblaze B2 /    │
+ │   audit_log          │                      │  MinIO on L4 box)  │
+ │   invite_codes       │                      │   videos (private) │
+ │   abuse_reports      │                      │   reports (pdf)    │
+ └──────────────────────┘                      │   heatmaps (png)   │
+                                               └────────────────────┘
 ```
 
 ### 3.1 V2 responsibilities
 
 | Node | Responsibilities | Scale profile |
 |------|-----------------|--------------|
-| Cloudflare | DNS, TLS, CDN, WAF, rate limits at edge, Turnstile | Free/Pro tier |
-| Vercel | Next.js serving (SSR/SSG), API route proxies | Hobby → Pro |
-| FastAPI | Auth, validation, persistence, job enqueue, webhook handling, audit log writes, DPDP endpoints | 1 vCPU / 1 GB initially |
-| Redis | Queue + rate windows + sessions | Small tier |
-| Worker | Inference using `src/pipeline.Pipeline.run_on_video` | L4 GPU (on-demand or dedicated) |
-| Postgres | Users, analyses metadata, audit, invites, abuse reports, subscriptions | Neon free → Pro |
-| Object storage | Videos (24 h–180 d per tier), PDFs, heatmaps | R2 for reports; R2 or MinIO for videos |
+| Cloudflare | DNS, TLS, CDN, WAF, rate limits at edge, Turnstile | **Free plan only** — never upgrade to Pro |
+| Vercel | Next.js serving (SSR/SSG), API route proxies | **Hobby (free) only** |
+| FastAPI | Auth, validation, persistence, job enqueue, audit log writes, DPDP endpoints | Single container on **Render free web service** or **Fly.io free Hobby allowance** (3 × shared-cpu-1x, 256 MB) |
+| Redis | Queue + rate windows + sessions | **Upstash free** (10 k commands/day, 256 MB) |
+| Worker | Inference using `src/pipeline.Pipeline.run_on_video` | **College L4 GPU** (primary) / **Kaggle free P100-T4 notebook** (fallback) / **Colab T4** (demo fallback). Never Modal / RunPod / paid GPU hosts. |
+| Postgres | Users, analyses metadata, audit, invites, abuse reports | **Neon free** (0.5 GB storage, 1 project). If capped, shed load via rate limits — do not upgrade. |
+| Object storage | Videos (24 h lifecycle), PDFs, heatmaps | **Cloudflare R2 free 10 GB** or **Backblaze B2 free 10 GB**. MinIO on the L4 box in dev. |
 
 ### 3.2 Request flow — new analysis
 
 ```
 User → website (/analyses/new)
       → (browser PUT) R2 pre-signed URL   [large video, bypass API]
-      → (POST /analyses  with video key)
+      → (POST /v1/jobs  with video key)
       → FastAPI validates, inserts rows, enqueues RQ job
       ← 202 { id, status: "queued" }
 
@@ -181,7 +184,7 @@ Worker pops job → fetches video from R2 → runs Pipeline
    → updates analyses.status = "done"
    → publishes pubsub event (Redis) for SSE (optional V3)
 
-Website polls GET /analyses/{id} every 2 s
+Website polls GET /v1/jobs/{id} every 2 s
    ← when status="done", render Results
 ```
 
@@ -221,8 +224,9 @@ Additional fields over V1 `POST /analyze`:
 ### 3.5 Data model (Postgres, minimum viable)
 
 ```
-users(id, email_hash, email_enc, phone_hash, phone_enc, role, tier,
+users(id, email_hash, email_enc, phone_hash, phone_enc, role,
       consent_version, consent_at, created_at, deleted_at)
+-- NOTE: no `tier` column. Single free tier; abuse is controlled by rate limits, not billing state.
 
 invite_codes(code, user_id_nullable, created_by_admin_id, used_at)
 
@@ -231,10 +235,8 @@ analyses(id, user_id, video_storage_key, report_json_key, report_pdf_key,
          engine_version, model_checksums_json, duration_s, frames_analysed,
          inference_ms, created_at, completed_at, expires_at)
 
-subscriptions(id, user_id, provider, provider_customer_id, tier, status,
-              renewed_at, cancel_at, created_at)
-
-webhooks_events(id, provider, event_id, payload_json, processed_at)
+-- `subscriptions` and `webhooks_events` tables were removed on the free-tier pivot.
+-- Do not re-introduce them. No payment processing exists in this project.
 
 abuse_reports(id, reporter_user_id, analysis_id, reason, status,
               reviewed_by_admin_id, reviewed_at, created_at)
@@ -277,8 +279,8 @@ audit_log(id, actor_user_id, action, target_type, target_id, ip_hash,
 
 Covered in [`ADMIN.md`](ADMIN.md) §2 and §3. Summary:
 
-- **Student-mode (simple):** single L4 box runs FastAPI + worker + MinIO + Postgres behind a Cloudflare tunnel. `docker compose up`.
-- **Scaled-mode:** FastAPI on Fly.io, worker on Modal GPU, Postgres on Neon, Redis on Upstash, storage on R2. Same code, different compose file.
+- **Student-mode (simple, default):** single college-L4 box runs FastAPI + worker + MinIO + Postgres behind a Cloudflare tunnel. `docker compose up`. 100 % free — relies only on college hardware + Cloudflare free tier.
+- **Split-free-tier mode:** FastAPI on **Render free** (or **Fly.io free Hobby**), worker on the **college L4** or a **Kaggle notebook**, Postgres on **Neon free**, Redis on **Upstash free**, storage on **Cloudflare R2 free 10 GB**. Same code, different compose file. **Scaled mode previously referenced Modal / RunPod — those are banned; this project stays on free tiers only.**
 
 ---
 
@@ -286,11 +288,15 @@ Covered in [`ADMIN.md`](ADMIN.md) §2 and §3. Summary:
 
 Detailed in [`ADMIN.md`](ADMIN.md) §6. Short version:
 
-- Metrics: Prometheus → Grafana.
-- Traces: OpenTelemetry across website → API → worker.
-- Logs: structured JSON → Loki (or BetterStack).
-- Errors: Sentry (web client + API server).
-- Uptime: UptimeRobot on `/health` + `/`.
+- Metrics: Prometheus remote-write → **Grafana Cloud free tier** (10 k active series, 14-day retention).
+- Traces: OpenTelemetry across website → API → worker → **Grafana Cloud Tempo free**.
+- Logs: structured JSON → **Grafana Cloud Loki free** (50 GB ingest, 14-day retention) or stdout if the quota is tight.
+- Errors: **Sentry free Developer plan** (5 k events/mo, aggressive sampling).
+- Uptime: **UptimeRobot free** (50 monitors, 5 min interval) on `/v1/healthz/live` + `/` (website).
+- Analytics: **Umami self-hosted** on Vercel Hobby.
+- Status page: **Instatus free** or static Next.js page.
+
+**If any of these free quotas are exceeded, the fix is to sample harder or shed load — never to upgrade to a paid plan.**
 
 ---
 

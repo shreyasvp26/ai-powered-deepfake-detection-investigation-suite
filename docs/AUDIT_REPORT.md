@@ -18,7 +18,7 @@ This is a **living** document. Every closed item must list the PR / commit and t
 | Trained weights on disk | **partial** — Xception `full_c23.p` pending, DSAN v3 checkpoints not yet produced |
 | Real benchmarks in `docs/TESTING.md` | **TBD** — every metric row is a placeholder |
 | Public website | **not started** (this is the V2 scope) |
-| Authentication / payments | **not started** |
+| Authentication (magic-link) | **not started** (V2-beta). No payment surface exists — permanently out of scope. |
 | Deployment story | **SSH tunnel only** — not viable for end users |
 | Documentation coverage | **high for engine**, **missing for product/ops/website** |
 | Known bugs in `docs/BUGS.md` | 3 filed |
@@ -88,7 +88,7 @@ The project is in a healthy **engine-complete, product-not-started** state. The 
 **Problem:** Running inference today requires (1) SSH access to a GPU host, (2) a local Streamlit instance, (3) an active tunnel. That is not shippable.
 
 **Fix path:** See [`docs/ADMIN.md`](ADMIN.md) §Deployment. Target:
-- **Inference service:** containerised FastAPI on a student-friendly GPU host (Modal / RunPod / Fly.io GPU / college L4).
+- **Inference service:** containerised FastAPI whose worker runs on the **college L4 GPU** (primary) with **Kaggle free notebooks** / **Colab T4** as documented fallbacks. **Paid GPU hosts (Modal, RunPod, Fly GPU) are banned** — see [`FREE_STACK.md`](FREE_STACK.md).
 - **Website:** Vercel or Cloudflare Pages.
 - **Storage:** S3-compatible bucket for ephemeral uploads + PDF reports.
 - **Queue:** lightweight Redis + RQ / Dramatiq for long jobs (>15 s).
@@ -120,7 +120,9 @@ The project is in a healthy **engine-complete, product-not-started** state. The 
 
 **Problem:** Line 3 of `AGENTS.md` tells agents to follow `docs/MASTER_IMPLEMENTATION.md`. No such file exists. `FOLDER_STRUCTURE.md` also mentions it. Weak agents will get stuck or hallucinate content.
 
-**Fix:** Replace every reference with `docs/PROJECT_PLAN.md` + `docs/IMPLEMENTATION_PLAN.md`. Done as part of the current pass.
+**Fix:** Replace every reference with `docs/PROJECT_PLAN.md` + `docs/IMPLEMENTATION_PLAN.md`; remove/retire the stale doc. Done as part of the current pass.
+
+**Verification:** `rg "MASTER_IMPLEMENTATION" -S` returns no live references (only historical mention in `AUDIT_REPORT.md`).
 
 ---
 
@@ -132,7 +134,7 @@ The project is in a healthy **engine-complete, product-not-started** state. The 
 - `evaluate_spatial_xception.py` uses `--max-frames`, not `--limit`; inconsistency with `evaluate_detection_fusion.py`. Documented in `WORK_WITHOUT_CUDA.md` but not in `BUGS.md`.
 - `Pipeline.run_on_video` catches generic `Exception` on the API; no structured error taxonomy — users see raw stack strings.
 - `StandardScaler` + `LogisticRegression` is saved via `joblib`; loading across scikit-learn major versions will warn but is not version-pinned in the report JSON.
-- Upload size cap is 1 GB in `app/inference_api.py` but `docs/WEBSITE_PLAN.md` will target 100 MB free / 500 MB paid; inconsistency with NFR-04 needs clarification.
+- Upload size cap is 1 GB in `app/inference_api.py` but `docs/WEBSITE_PLAN.md` targets a single free-tier 100 MB limit (NFR-04). Harmonise by enforcing 100 MB in the API + website; the engine can keep its higher internal cap for local research use.
 
 **Fix:** File these as BUG-004 … BUG-008 in updated `docs/BUGS.md`.
 
@@ -195,7 +197,7 @@ The project is in a healthy **engine-complete, product-not-started** state. The 
 
 **Problem:** A 60 s video with Grad-CAM will exceed a request budget. The website will need a status-polling model.
 
-**Fix:** Add **RQ (Redis Queue)** or **Dramatiq** worker model (simpler than Celery). Endpoints: `POST /analyses` → 202 + job id → `GET /analyses/{id}` → status/result.
+**Fix:** Add **RQ (Redis Queue)** or **Dramatiq** worker model (simpler than Celery). Endpoints: `POST /v1/jobs` → 202 + job id → `GET /v1/jobs/{id}` → status/result.
 
 ### M-03 — No face-quality gate
 

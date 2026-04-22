@@ -1,7 +1,9 @@
 # Security & Privacy
 
 > Root security policy for the DeepFake Detection & Investigation Suite.
-> Partner docs: [`docs/VISION.md`](docs/VISION.md), [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md), [`docs/WEBSITE_PLAN.md`](docs/WEBSITE_PLAN.md), [`docs/ADMIN.md`](docs/ADMIN.md).
+> Partner docs: [`docs/VISION.md`](docs/VISION.md), [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md), [`docs/WEBSITE_PLAN.md`](docs/WEBSITE_PLAN.md), [`docs/ADMIN.md`](docs/ADMIN.md), [`docs/FREE_STACK.md`](docs/FREE_STACK.md).
+>
+> **This project processes no payments.** There is no Stripe, no Razorpay, no card data, no PCI-DSS surface. All threat-model rows, controls, and retention policies below assume a **single free tier**.
 
 ---
 
@@ -9,10 +11,10 @@
 
 | Threat | Asset | Mitigation |
 |--------|-------|-----------|
-| Abusive uploads (CSAM, gore, non-consensual intimate imagery) | Storage + reputation | ToS prohibits such uploads; free-tier lifecycle delete 24 h; content moderation queue surfaces reported items to admin |
-| Credential theft | User accounts | OTP-only auth, httpOnly + SameSite=Lax cookies, refresh rotation, device list |
-| API scraping / abuse | Inference GPU budget | Rate limits, Turnstile on signup, per-tier daily quotas, ASN bans on repeat abuse |
-| Payment fraud | Revenue | Stripe Radar / Razorpay default fraud tooling; no card data ever hits our servers |
+| Abusive uploads (CSAM, gore, non-consensual intimate imagery) | Storage + reputation | ToS prohibits such uploads; lifecycle delete 24 h on every upload; content moderation queue surfaces reported items to admin |
+| Credential theft | User accounts | Email magic-link auth, httpOnly + SameSite=Lax cookies, refresh rotation, device list |
+| API scraping / abuse | Inference GPU budget on the college L4 | `slowapi` rate limits (3/h anon, 10/h authenticated), Cloudflare Turnstile on signup, ASN bans on repeat abuse |
+| Payment fraud | **N/A — no payments processed** | N/A |
 | Data breach (storage) | User privacy | Encryption at rest on Postgres + object storage; KMS-wrapped DEKs; minimal PII (email + optional phone); hard-delete on request |
 | Data breach (transit) | User privacy | TLS 1.3 only; HSTS preload |
 | Insider admin misuse | User privacy | Audit log on every admin read of a user analysis; quarterly access review |
@@ -25,17 +27,17 @@
 
 | Data | Collected? | Storage | Retention | Encryption |
 |------|-----------|---------|-----------|-----------|
-| Uploaded video | Yes | S3-compatible bucket (private) | 24 h free tier; 30 d Pro; 180 d Elite (user-configurable down to 24 h) | At rest (AES-256 / SSE-S3) + TLS in transit |
+| Uploaded video | Yes | S3-compatible bucket (private) — **Cloudflare R2 free / Backblaze B2 free / MinIO on college L4** | **24 h hard on every upload** (user-configurable down to 1 h). Single free tier, no extended-retention plan | At rest (AES-256 / SSE-S3) + TLS in transit |
 | Per-frame face crops (intermediate) | Yes (worker memory / scratch) | Ephemeral disk | Deleted at job completion | Not persisted |
-| Analysis JSON + PDF report | Yes | S3 + Postgres FK | Tracks the video's retention | At rest + signed URLs |
-| User email | Yes | Postgres | While account active + 30 d after delete request | AES-256 column encryption |
+| Analysis JSON + PDF report | Yes | S3 + Postgres FK | Tracks the video's retention (24 h) | At rest + signed URLs |
+| User email | Yes | Postgres (Neon free) | While account active + 30 d after delete request | AES-256 column encryption |
 | User phone (optional) | If provided | Postgres | Same | Hashed for lookup + encrypted for display (two columns) |
 | Invite codes | Yes | Postgres | While active | N/A (non-PII) |
-| Payment identifiers | Stripe / Razorpay refs only | Postgres | 7 years (tax) | N/A (non-PII references) |
+| Payment identifiers | **Never collected — no payments processed** | — | — | — |
 | Card data | **Never** | — | — | — |
 | Audit log entries | Yes | Postgres append-only | 3 years | At rest |
-| Telemetry / metrics | Yes (aggregate, non-PII) | Prometheus / Grafana | 90 days | N/A |
-| Sentry error payloads | Yes | Sentry (EU region) | 30 days | Sentry-managed + PII scrubbing |
+| Telemetry / metrics | Yes (aggregate, non-PII) | **Grafana Cloud free** | 14 days (free-tier retention) | N/A |
+| Sentry error payloads | Yes | **Sentry free Developer plan** (EU region, 5 k events/mo) | 30 days | Sentry-managed + PII scrubbing |
 
 ---
 
@@ -63,14 +65,14 @@
 
 ### 4.2 Authentication
 
-- Email OTP via Resend / SendGrid; 6-digit, 10-minute TTL, 5 attempts.
-- Phone OTP via Twilio (optional, DPDP-sensitive — hashed phone for lookup, encrypted for display).
+- Email magic-link via **Resend free plan (3 k emails/mo)** or **Brevo free plan**. 15-minute TTL, single-use, anti-replay nonce.
+- **No phone / SMS / Twilio** — intentionally excluded because every SMS provider is paid. Phone number remains an optional profile field only (encrypted/hashed if provided, never used for OTP).
 - JWT in httpOnly + SameSite=Lax + Secure cookie; rotation on refresh.
-- Session invalidation list (Redis) for explicit sign-outs.
+- Session invalidation list (Upstash Redis free) for explicit sign-outs.
 
 ### 4.3 Authorisation
 
-- RBAC: `anonymous`, `user`, `pro`, `elite`, `admin`, `super_admin`. Promotions via payment webhook or admin action.
+- RBAC: `anonymous`, `user`, `admin`, `super_admin`. **There are no `pro` / `elite` / paid roles — single free tier.** Promotions between the remaining roles happen only via explicit admin action (never by webhook).
 - Every mutating endpoint checks the acting role and logs to the audit table.
 
 ### 4.4 Encryption at rest
@@ -81,7 +83,7 @@
 
 ### 4.5 Upload handling
 
-- Client-side validation (MIME, extension, max bytes per tier).
+- Client-side validation (MIME, extension, 100 MB / 60 s — single free-tier limit).
 - Server-side `file` magic-byte sniff + ffprobe to confirm container / codec.
 - Scan for media-length bomb (reject > 10 min video length).
 - Streamed directly to object storage via pre-signed PUT; the API node never holds the full file.
@@ -90,8 +92,8 @@
 ### 4.6 Secrets
 
 - Never in code. `.env.example` committed with dummy values.
-- Production secrets in the deployment platform's secret manager (Vercel env vars / Fly secrets / GitHub Actions OIDC).
-- Rotated quarterly; Stripe / Razorpay keys rotated annually + on any suspected incident.
+- Production secrets in the deployment platform's secret manager (Vercel Hobby env vars / Render env vars / Fly secrets / GitHub Actions OIDC).
+- Rotated quarterly; **there are no payment-processor keys to rotate — none exist in this project.**
 
 ### 4.7 Dependencies
 
@@ -101,14 +103,16 @@
 
 ### 4.8 Rate limiting
 
-| Endpoint | Anonymous | Free | Pro | Elite |
-|----------|-----------|------|-----|-------|
-| `/api/auth/*` | 5 / min / IP | 5 / min | 5 / min | 5 / min |
-| `POST /analyses` | N/A | 3 / hour | 30 / hour | 300 / hour |
-| `POST /demo/analyses` | 5 / hour / IP | 20 / hour | 60 / hour | 60 / hour |
-| `GET /analyses/*` | N/A | 120 / min | 600 / min | 1800 / min |
+Single free tier — no paid upgrade path.
 
-Enforced via Redis (sliding window) + fallback HTTP 429 with `Retry-After`.
+| Endpoint | Anonymous | Authenticated (free, default) | Academic invite (free, higher limit) |
+|----------|-----------|-------------------------------|--------------------------------------|
+| `/api/auth/*` | 5 / min / IP | 5 / min | 5 / min |
+| `POST /v1/jobs` | 3 / hour / IP | 10 / hour | 30 / hour |
+| `POST /demo/analyses` | 5 / hour / IP | 20 / hour | 60 / hour |
+| `GET /v1/jobs/*` | N/A | 120 / min | 600 / min |
+
+Enforced via **`slowapi` with Upstash Redis free** (sliding window) + fallback HTTP 429 with `Retry-After`. If Upstash's 10 k commands/day limit is ever approached, the response is to lower the per-IP limit in this table — **not** to upgrade to a paid Redis plan.
 
 ### 4.9 Abuse protection
 

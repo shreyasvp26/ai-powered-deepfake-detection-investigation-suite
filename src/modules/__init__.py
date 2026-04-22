@@ -1,1 +1,1 @@
-"""Detection, blink (deprecated), and explainability modules."""
+"""Detection and explainability modules."""

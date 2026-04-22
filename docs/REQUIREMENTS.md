@@ -22,9 +22,9 @@ Full narrative: [`VISION.md`](VISION.md).
 
 ## 2. Functional requirements
 
-### 2.1 Engine (all tiers)
+### 2.1 Engine
 
-- **FR-01** Accept video input (MP4, MOV, AVI) and image input up to the tier's size limit.
+- **FR-01** Accept video input (MP4, MOV, AVI) and image input up to **100 MB** (single free tier; see NFR-04).
 - **FR-02** Classify each input as REAL or FAKE using a logistic-regression fusion over spatial (`Ss`) and temporal (`Ts`) scores.
 - **FR-03** For FAKE inputs, attribute the manipulation to one of four FF++ classes with per-class softmax.
 - **FR-04** Produce dual Grad-CAM++ heatmaps (RGB + frequency stream) for representative frames when explainability is enabled.
@@ -45,10 +45,10 @@ Full narrative: [`VISION.md`](VISION.md).
 
 ### 2.3 HTTP API
 
-- **FR-30** `POST /analyses` (multipart video, authenticated) → `202 { id, status: "queued" }`.
-- **FR-31** `GET /analyses/{id}` → status (`queued` | `running` | `done` | `failed`), full result JSON when done.
-- **FR-32** `GET /analyses/{id}/report.pdf` → pre-signed URL redirect.
-- **FR-33** `GET /health` → engine version + model checksums + git sha.
+- **FR-30** `POST /v1/jobs` (multipart video, authenticated) → `202 { id, status: "queued" }`.
+- **FR-31** `GET /v1/jobs/{id}` → status (`queued` | `running` | `done` | `failed`), full result JSON when done.
+- **FR-32** `GET /v1/jobs/{id}/report.pdf` → pre-signed URL redirect or direct stream.
+- **FR-33** `GET /v1/healthz` (and `GET /v1/healthz/live` / `GET /v1/healthz/ready`) → engine version + model checksums + git sha; readiness probes for DB/Redis.
 - **FR-34** OpenAPI spec at `/docs`; a snapshot committed at `api/openapi.json`.
 - **FR-35** Rate limits per [`SECURITY.md`](../SECURITY.md) §4.8.
 
@@ -57,10 +57,10 @@ Full narrative: [`VISION.md`](VISION.md).
 Full spec: [`WEBSITE_PLAN.md`](WEBSITE_PLAN.md). Summary:
 
 - **FR-50** Marketing pages: `/`, `/how-it-works`, `/demo`, `/about`, `/privacy`, `/terms`, `/research`, `/contact`.
-- **FR-51** Auth: email OTP with optional phone OTP; invite-code gate in V2-beta; open signups in V2-launch.
+- **FR-51** Auth: email magic-link (Resend / Brevo free tier) only; invite-code gate in V2-beta; open signups (still free) in V2-launch.
 - **FR-52** Authenticated: `/dashboard`, `/analyses`, `/analyses/new`, `/analyses/[id]`, `/settings/*`.
 - **FR-53** Admin: `/admin/*` role-gated — users, analyses queue, abuse review, invites, audit log.
-- **FR-54** Subscription tiers (Free / Pro / Elite) with Stripe (international) + Razorpay (India).
+- **FR-54** **Single free tier only — no payments, no subscriptions, no Stripe / Razorpay.** Abuse is contained by rate limits (NFR-04 / SR-04) and Cloudflare Turnstile (SR-05), not by paid gating. This is a BTech academic project.
 - **FR-55** i18n at V3: EN + HI + MR at launch; others later.
 - **FR-56** DPDP data export (`GET /me/export`) + delete (`DELETE /me`).
 - **FR-57** SEO: sitemap, robots, JSON-LD on marketing routes.
@@ -86,10 +86,10 @@ Full spec: [`WEBSITE_PLAN.md`](WEBSITE_PLAN.md). Summary:
 |----|-------------|--------|
 | NFR-01 | Inference p95 latency — 10 s clip, 10 frames, no Grad-CAM, L4 GPU | ≤ 2 s |
 | NFR-02 | Inference p95 latency — same + dual Grad-CAM on 3 frames | ≤ 5 s |
-| NFR-03 | End-to-end p95 (upload → PDF ready) — 15 s clip, free tier | ≤ 30 s |
-| NFR-04 | Free-tier upload size cap | 100 MB |
-| NFR-05 | Pro-tier upload size cap | 500 MB |
-| NFR-06 | Elite-tier upload size cap | 2 GB |
+| NFR-03 | End-to-end p95 (upload → PDF ready) — 15 s clip | ≤ 30 s |
+| NFR-04 | Upload size cap (single free tier; hard limit) | 100 MB |
+| NFR-05 | Upload duration cap (single free tier) | 60 s |
+| NFR-06 | Per-IP anonymous rate limit (abuse control, replaces paid gating) | 3 analyses / hour |
 | NFR-07 | Website LCP on 4G mobile | ≤ 2.5 s |
 | NFR-08 | Lighthouse Performance / Accessibility on public pages | ≥ 90 / ≥ 95 |
 | NFR-09 | WCAG level | 2.1 AA |
@@ -119,9 +119,9 @@ Full spec: [`WEBSITE_PLAN.md`](WEBSITE_PLAN.md). Summary:
 | DR-02 | Identity-safe split JSONs (`data/splits/*_identity_safe.json`) committed; raw videos are gitignored |
 | DR-03 | Model artefacts (`*.pth`, `*.p`, `*.pkl`) stored out-of-git; SHA256 recorded in `models/CHECKSUMS.txt` |
 | DR-04 | Postgres with point-in-time recovery (PITR) on production |
-| DR-05 | Object storage bucket encrypted at rest; 24 h lifecycle delete for free-tier uploads |
+| DR-05 | Object storage bucket encrypted at rest; 24 h lifecycle delete for every upload (single free tier) |
 | DR-06 | Redis ephemeral (acceptable loss); persisted only for session tokens + rate-limit windows |
-| DR-07 | Free-tier upload retention: 24 h (user-configurable down to 1 h); Pro: 30 d; Elite: 180 d |
+| DR-07 | Upload retention: 24 h hard (user can shorten to 1 h). Report JSON/PDF retention mirrors the upload. No paid extended-retention tier |
 | DR-08 | Analysis report retention mirrors the underlying video's retention |
 | DR-09 | Audit log retention: 3 years |
 | DR-10 | No user upload is ever used for training |
@@ -139,12 +139,12 @@ See [`SECURITY.md`](../SECURITY.md) for policy. Key requirements:
 | SR-01 | TLS 1.3 for all client connections |
 | SR-02 | httpOnly + SameSite=Lax JWT cookies with refresh rotation |
 | SR-03 | CSP nonce-based `script-src 'self' 'nonce-...'` |
-| SR-04 | Rate limiting on `/api/auth/*` and `/analyses` |
+| SR-04 | Rate limiting on `/api/auth/*` and `POST /v1/jobs` |
 | SR-05 | Bot protection (Cloudflare Turnstile) on signup |
 | SR-06 | App-layer envelope encryption of PII columns (email / phone / name) |
 | SR-07 | Phone numbers stored hashed (lookup) + encrypted (display) in separate columns |
 | SR-08 | Audit log on every admin read of a user's upload or analysis |
-| SR-09 | Card data never touches our servers (Stripe Checkout / Razorpay Hosted) |
+| SR-09 | **No payment processing exists. We do not collect, store, or transmit card data.** |
 | SR-10 | DPDP data export returns user's full data in ZIP + JSON |
 | SR-11 | DPDP data deletion hard-deletes within 30 days |
 | SR-12 | Consent versioning; re-consent prompt when policies materially change |
@@ -159,8 +159,8 @@ See [`SECURITY.md`](../SECURITY.md) for policy. Key requirements:
 
 - **DPDP Act 2023 (India)** — explicit consent, grievance redressal, data fiduciary obligations, retention limits, 72-hour breach notification.
 - **GDPR (EU users)** — lawful basis (consent), DSAR, right to erasure, breach notification.
-- **PCI-DSS** — never our responsibility; we use Stripe Checkout and Razorpay Hosted.
-- **Platform ToS** — Vercel, Cloudflare, Modal, RunPod, Neon, Upstash — comply with all.
+- **PCI-DSS** — **N/A; no payments are processed by this project.**
+- **Platform ToS** — Vercel Hobby, Cloudflare (free), Neon (free), Upstash (free), Cloudflare R2 (free tier), Kaggle / Colab (free GPU) — comply with all free-tier acceptable-use policies (see [`FREE_STACK.md`](FREE_STACK.md)).
 - **Academic dataset licences** — FF++ is research-only; we do not expose FF++ clips in the public website.
 
 ---
@@ -189,8 +189,8 @@ See [`SECURITY.md`](../SECURITY.md) for policy. Key requirements:
 | V2-beta (invite) | ≤ 50 active | Hand-picked testers |
 | V2-launch | 500 registered, 50 DAU | Single GPU worker acceptable |
 | V3-scale + 3 mo | 5 000 registered, 500 DAU | Two GPU workers, spot-scaled |
-| V3-scale + 12 mo | 25 000 registered, 2 000 DAU | Autoscale workers; Neon Pro |
-| V4 mobile + 12 mo | 100 000 registered, 5 000 DAU | CDN in front of PDFs; read-replica Postgres |
+| V3-scale + 12 mo | 25 000 registered, 2 000 DAU | **If we ever approach Neon / Upstash / R2 free-tier ceilings, we shed load via rate limits — we do NOT upgrade to paid. Academic project.** |
+| V4 mobile + 12 mo | 100 000 registered, 5 000 DAU | **Out of scope for the BTech project window; listed for north-star context only.** |
 
 At 5 000 DAU peak: API throughput target ≥ 20 req/s; inference throughput target ≥ 2 analyses/s (multiple workers).
 
@@ -202,29 +202,31 @@ At 5 000 DAU peak: API throughput target ≥ 20 req/s; inference throughput targ
 - Face / identity recognition / matching.
 - Realtime video-call analysis.
 - Mobile app at V1 or V2.
-- Self-hosted K8s; we deploy to PaaS-grade services.
+- Self-hosted K8s; we deploy to free PaaS-grade services only.
 - Training on user uploads.
 - Claims of 100 % accuracy.
+- **Any paid service, subscription, or premium feature. This project is strictly free-tier only. See [`FREE_STACK.md`](FREE_STACK.md) for the approved service list.**
 
 ---
 
 ## 10. Dependencies
 
-| External | Purpose | Failure mode |
-|----------|---------|--------------|
-| FaceForensics++ access | Training data | Block V1-fix until granted |
+All dependencies below must be on a **free / free-tier / self-hostable** plan. See [`FREE_STACK.md`](FREE_STACK.md) for the authoritative list, limits, and upgrade-refusal policy.
+
+| External (free tier) | Purpose | Failure mode |
+|----------------------|---------|--------------|
+| FaceForensics++ academic access | Training data | Block V1-fix until granted |
 | PyTorch 2.1.2 + CUDA 12.x | Inference | Pinned; regression-guard at CI |
-| Resend / SendGrid | Auth email | Block signups; fallback to alternate provider on incident |
-| Twilio | Phone OTP (optional) | Degrade to email-only |
-| Stripe | International payments | Block international signups; India works via Razorpay |
-| Razorpay | India payments | Block India signups; international works via Stripe |
-| Cloudflare | DNS / CDN / WAF / Turnstile | Degrade: DNS still served by registrar; WAF off |
-| Neon Postgres | Users + metadata + audit | See `ADMIN.md` §7.3 |
-| Upstash Redis | Queue + sessions | Queue persisted; sessions invalidated gracefully |
-| Cloudflare R2 | PDFs, assets | Degrade to MinIO on L4 box |
-| Modal / RunPod | GPU inference (Mode B) | Fall back to L4 box (Mode A) |
-| Sentry | Errors | Degrade: errors logged to structured logs only |
-| Plausible | Analytics | No user-visible impact |
+| Kaggle notebooks (P100 / T4) or Google Colab (T4) — free | GPU training + heavy batch inference | Re-queue job; user retries in ~30 s when a worker is live |
+| College L4 box (when available) | Primary GPU inference in V2-beta/launch | Fall back to "GPU unavailable — try later" UX |
+| Resend / Brevo (free plan) | Auth magic-link email | Block signups; swap provider on incident |
+| Cloudflare (free) | DNS / CDN / WAF / Turnstile | Degrade: DNS still served by registrar; WAF off |
+| Neon Postgres (free) | Users + metadata + audit | See `ADMIN.md` §7.3 |
+| Upstash Redis (free) | Queue + sessions | Queue persisted; sessions invalidated gracefully |
+| Cloudflare R2 (free 10 GB) or Backblaze B2 (free 10 GB) | PDFs, assets | Degrade to MinIO on the L4 box |
+| Sentry (free Developer plan, 5 k events/mo) | Errors | Degrade: errors logged to structured logs only |
+| Umami (self-hosted on Vercel Hobby) | Analytics | No user-visible impact |
+| UptimeRobot (free 50 monitors) | Uptime checks | Manual polling |
 
 ---
 
@@ -233,9 +235,9 @@ At 5 000 DAU peak: API throughput target ≥ 20 req/s; inference throughput targ
 | Milestone | Acceptance |
 |-----------|-----------|
 | **V1-fix** | `docs/AUDIT_REPORT.md` critical + high all `CLOSED`; `docs/TESTING.md` has no `TBD`; CI green; tag `v1.0.0` |
-| **V2-alpha** | `docker compose up` serves `POST /analyses` end-to-end; OpenAPI snapshot committed |
+| **V2-alpha** | `docker compose up` serves `POST /v1/jobs` end-to-end; OpenAPI snapshot committed |
 | **V2-beta** | 20 invited testers complete upload → PDF without help; Lighthouse ≥ 90 on `/` |
-| **V2-launch** | Paying user can sign up → pay → upload → receive verdict; DPDP export + delete live |
+| **V2-launch** | Any visitor can sign up (free) → upload → receive verdict & PDF; DPDP export + delete live; admin panel + legal pages published |
 | **V3-scale** | Celeb-DF v2 + DFDC preview results published; 99 % uptime SLO met for 30 consecutive days |
 | **V3-robust** | i18n EN / HI / MR live; WCAG 2.1 AA sign-off |
 | **V4** | Android + iOS builds published; push notifications on analysis completion |

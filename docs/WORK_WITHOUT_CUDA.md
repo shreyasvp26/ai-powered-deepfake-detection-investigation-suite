@@ -81,10 +81,6 @@ These are **gaps vs** [PROJECT_PLAN_v10.md](PROJECT_PLAN_v10.md) Section 14 / 16
 
 | Item | Status in repo | Notes |
 |------|----------------|--------|
-| Blink reference module | **Missing** `src/modules/blink.py` | Deprecated for fusion but plan Phase 4 keeps reference code; MediaPipe path is CPU-oriented. |
-| `training/train_blink_classifier.py` | **Missing** | Deprecated XGBoost reference. |
-| `tests/test_blink.py` | **Missing** | Plan asks to retain tests for reference module. |
-| `notebooks/04_blink_detection.ipynb` | **Missing** | Listed in [notebooks/README.md](../notebooks/README.md). |
 | `training/visualize_embeddings.py` | **Missing** | Referenced in [AGENTS.md](../AGENTS.md); t-SNE export for dashboard / FR-09. |
 | `training/evaluate.py` | **Missing** | Plan directory diagram; **substitutes:** [evaluate_spatial_xception.py](../training/evaluate_spatial_xception.py), [evaluate_detection_fusion.py](../training/evaluate_detection_fusion.py). |
 | Notebooks `05`–`08` | **Missing** (only `01`–`03` exist) | Author structure + narrative; full numbers need trained checkpoints. |

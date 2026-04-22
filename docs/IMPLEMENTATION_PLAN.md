@@ -14,7 +14,7 @@
 | V1-fix | "What are the **real** numbers on FF++ identity-safe?" |
 | V2-alpha | "How do I call inference as an HTTP service, not via SSH?" |
 | V2-beta | "Where can I drop a video and get a verdict?" |
-| V2-launch | "Can I sign up and pay for it?" |
+| V2-launch | "Can anyone sign up (free) and use it right now?" |
 | V3-scale | "How does this do on Celeb-DF / real-world clips?" |
 | V3-robust | "Is it usable on my phone? In my language?" |
 | V4 | "Can I get this as an app?" |
@@ -48,18 +48,18 @@ Each phase lists: **Goal**, **Deliverables (PR-sized)**, **Exit criteria**. Deli
 
 **Deliverables:**
 
-- [ ] **V1F-01** Remove stale `docs/MASTER_IMPLEMENTATION.md` references (AGENTS.md, FOLDER_STRUCTURE.md, others); point them at `docs/PROJECT_PLAN.md` + this file. *(AUDIT H-01)*
-- [ ] **V1F-02** Remove Blink scope from `AGENTS.md` and `docs/FEATURES.md` (F003 → Dropped); add "Dropped features" to `docs/RESEARCH.md`. *(AUDIT C-04)*
-- [ ] **V1F-03** Add `src/__init__.py` with `ENGINE_VERSION = "1.0.0"`; report generator emits `engine_version` + `model_sha256` per model file. *(AUDIT H-06)*
-- [ ] **V1F-04** `scripts/hash_models.sh` produces `models/CHECKSUMS.txt`; commit the txt (binaries stay ignored). *(AUDIT H-06)*
-- [ ] **V1F-05** Implement the full training loop in `training/train_attribution.py` (AMP, warmup, gradient accumulation, SupCon + CE, W&B, early stopping, checkpointing); retain `--dry-run` and add `--smoke-train`. *(AUDIT H-03, plan §10.11)*
-- [ ] **V1F-06** Add `.github/workflows/ci.yml` running `pytest tests/ -v`, `python -m black --check .`, `flake8`, `isort --check`, `mypy src/` (strict on new modules only). *(AUDIT M-07)*
+- [x] **V1F-01** Remove stale `docs/MASTER_IMPLEMENTATION.md` references (AGENTS.md, FOLDER_STRUCTURE.md, others); point them at `docs/PROJECT_PLAN.md` + this file. *(AUDIT H-01)*
+- [x] **V1F-02** Remove Blink scope from `AGENTS.md` and `docs/FEATURES.md` (F003 → Dropped); add "Dropped features" to `docs/RESEARCH.md`. *(AUDIT C-04)*
+- [x] **V1F-03** Add `src/__init__.py` with `ENGINE_VERSION = "1.0.0"`; report generator emits `engine_version` + `model_sha256` per model file. *(AUDIT H-06)*
+- [x] **V1F-04** `scripts/hash_models.sh` produces `models/CHECKSUMS.txt`; commit the txt (binaries stay ignored). *(AUDIT H-06)*
+- [x] **V1F-05** Implement the full training loop in `training/train_attribution.py` (AMP, warmup, gradient accumulation, SupCon + CE, W&B, early stopping, checkpointing); retain `--dry-run` and add `--smoke-train`. *(AUDIT H-03, plan §10.11)*
+- [x] **V1F-06** Add `.github/workflows/ci.yml` (Python 3.10: `pre-commit run --all-files`, `pytest -q -m "not gpu and not weights"`), `pytest.ini` markers `gpu` / `weights`, PR template. *(AUDIT M-07)*
 - [ ] **V1F-07** File BUG-004…BUG-008 in `docs/BUGS.md` from the audit findings. *(AUDIT H-02)*
-- [ ] **V1F-08** Add **Methodology** section + seed policy + output-regeneration script to `docs/TESTING.md`. *(AUDIT H-04)*
+- [x] **V1F-08** Add **Methodology** section + seed policy + output-regeneration script to `docs/TESTING.md`. *(AUDIT H-04)*
 - [ ] **V1F-09** Execute `docs/GPU_RUNBOOK_PHASE2_TO_5.md` end-to-end on the L4 server; commit numbers to `docs/TESTING.md`. *(AUDIT C-01)*
 - [ ] **V1F-10** Run ablation (Section 10.12 table) and fill rows in `docs/TESTING.md`. *(AUDIT C-01)*
-- [ ] **V1F-11** Robustness smoke: JPEG-40, blur, 90° rotation; record deltas in `docs/TESTING.md`. *(AUDIT M-04 light version)*
-- [ ] **V1F-12** Cross-dataset smoke: Celeb-DF v2 face-crop subset (100 videos); record AUC drop. *(AUDIT H-05)*
+- [x] **V1F-11** Robustness smoke: JPEG-40, blur, 90° rotation; record deltas in `docs/TESTING.md`. *(AUDIT M-04 light version; scaffold: `tests/robustness/`, `training/evaluate_robustness.py` — GPU AUC TBD)*
+- [x] **V1F-12** Cross-dataset smoke: Celeb-DF v2 face-crop subset (100 videos); record AUC drop. *(AUDIT H-05; scaffold: `src/data/celebdfv2.py`, `dfdc_preview.py`, `training/evaluate_cross_dataset.py` — GPU AUC TBD)*
 - [ ] **V1F-13** Tag `v1.0.0`; update `docs/CHANGELOG.md`.
 
 **Exit:** `docs/AUDIT_REPORT.md` has no `OPEN` Critical or High rows; `docs/TESTING.md` has no `TBD`; CI green; `v1.0.0` tag pushed; README quick-start works for a stranger who has FF++ crops.
@@ -72,18 +72,18 @@ Each phase lists: **Goal**, **Deliverables (PR-sized)**, **Exit criteria**. Deli
 
 **Deliverables:**
 
-- [ ] **V2A-01** Scaffold `api/` package: `api/main.py`, `api/routers/analyses.py`, `api/schemas/`, `api/deps/`, `api/security.py`, `api/telemetry.py`, `api/worker.py`. FastAPI + Pydantic v2 + Uvicorn + RQ + Redis. Pin versions in `requirements.txt`.
-- [ ] **V2A-02** `POST /analyses` accepts multipart video upload, enqueues a job, returns `202 { id, status: 'queued' }`. Persist metadata in Postgres (SQLAlchemy 2.x + Alembic migration).
-- [ ] **V2A-03** `GET /analyses/{id}` returns status (`queued` | `running` | `done` | `failed`) + result JSON when `done`.
-- [ ] **V2A-04** `GET /analyses/{id}/report.pdf` streams the PDF from object storage.
-- [ ] **V2A-05** `GET /health` returns engine version + git sha + model checksums.
+- [x] **V2A-01** Scaffold `api/` package: `api/main.py`, `api/routers/jobs.py`, `api/routers/health.py`, `api/schemas/`, `api/deps/`, `api/security.py`, `api/telemetry.py`, `api/storage.py`, `api/worker.py`. FastAPI + Pydantic v2 + Uvicorn + RQ + Redis. Pin versions in `requirements.txt`. **Wave 10** HTTP contract: `POST/GET /v1/jobs…`, `GET /v1/healthz` (plus `live` / `ready` variants).
+- [x] **V2A-02** `POST /v1/jobs` accepts multipart video upload, enqueues a job, returns `202 { id, status: 'queued' }`. Persists in SQLite/Postgres (SQLAlchemy 2.x); size/MIME/magic, SHA256, duration ≤ 60 s; RQ queue (`SYNC_RQ=1` runs inline in tests / smoke).
+- [x] **V2A-03** `GET /v1/jobs/{id}` returns status + embeds `result` JSON when `done` (`error` when `failed`).
+- [x] **V2A-04** `GET /v1/jobs/{id}/report.pdf` streams PDF (local dev storage or S3/MinIO when `s3_endpoint_url` is set).
+- [x] **V2A-05** `GET /v1/healthz` (and liveness / readiness) reports engine version + git sha + model checksums; readiness uses DB + Redis.
 - [ ] **V2A-06** RQ worker invokes `src/pipeline.Pipeline.run_on_video`; writes report JSON/PDF to S3-compatible storage (MinIO locally, Backblaze/Cloudflare R2 in prod). Retain the Flask `--mock` server for dev.
-- [ ] **V2A-07** Rate-limit `/analyses` (3 per hour per IP free; bump later with auth).
-- [ ] **V2A-08** Docker image + `docker-compose.yml` for local dev (api + worker + postgres + redis + minio).
-- [ ] **V2A-09** OpenAPI spec published at `/docs`; committed snapshot in `api/openapi.json` for website agent consumption.
-- [ ] **V2A-10** Inference-service integration tests (spin up compose + curl through `POST /analyses` → `GET /analyses/{id}` → assertions on JSON).
+- [ ] **V2A-07** Rate-limit `POST /v1/jobs` (3 per hour per IP free; bump later with auth).
+- [x] **V2A-08** Docker image (`api/Dockerfile`, `api/requirements-docker.txt`) + root `docker-compose.yml` (api + worker + postgres:16 + redis:7 + minio) + `scripts/docker-smoke.sh`.
+- [x] **V2A-09** OpenAPI spec at `/docs` (runtime); committed snapshot in `api/openapi.json` via `scripts/export_openapi.py`; CI enforces `git diff --exit-code` on that file.
+- [x] **V2A-10** `api/tests/test_integration_httpx_job_flow.py` — `httpx.AsyncClient` + `ASGITransport` multi-step job flow; optional **`docker-compose-smoke`** CI job runs `scripts/docker-smoke.sh` against compose.
 
-**Exit:** one-command `docker compose up` brings up a working inference service; `curl -F video=@clip.mp4 .../analyses` + poll ends with a JSON verdict.
+**Exit:** one-command `docker compose up` brings up a working inference service; `curl -F video=@clip.mp4 .../v1/jobs` + poll ends with a JSON verdict.
 
 ---
 
@@ -94,33 +94,33 @@ Each phase lists: **Goal**, **Deliverables (PR-sized)**, **Exit criteria**. Deli
 **Deliverables:**
 
 - [ ] **V2B-01** Scaffold `website/` (Next.js 15, TypeScript strict, Tailwind, ESLint). `pnpm` or `npm`.
-- [ ] **V2B-02** Marketing pages: `/`, `/how-it-works`, `/demo`, `/about`, `/privacy`, `/terms`, `/contact`. Copy review before merge.
-- [ ] **V2B-03** Auth: email OTP via Resend/SendGrid; NextAuth / Auth.js with JWT + httpOnly cookie; invite-list check.
+- [ ] **V2B-02** Marketing pages: `/`, `/how-it-works`, `/demo`, `/about`, `/privacy`, `/terms`, `/contact`. Copy review before merge. **No `/pricing` page — single free tier only.**
+- [ ] **V2B-03** Auth: email magic-link via **Resend free** or **Brevo free**; Auth.js v5 with JWT + httpOnly cookie; invite-list check.
 - [ ] **V2B-04** `/dashboard` (protected): upload widget, current-analysis card, history list.
 - [ ] **V2B-05** `/analyses/[id]` page: verdict gauge, per-frame plot (Recharts), heatmap viewer, method-bar chart, PDF download button. Polls the API every 2 s until `done` or `failed`.
 - [ ] **V2B-06** API client layer (`website/src/lib/api.ts`) generated from the OpenAPI snapshot.
 - [ ] **V2B-07** Error states: file too large, unsupported format, no face detected, analysis failed, rate-limited.
 - [ ] **V2B-08** Responsive + dark-mode default; Lighthouse ≥ 90 on `/` and `/demo`.
 - [ ] **V2B-09** Playwright e2e: happy path (upload → poll → report download); error path (no face).
-- [ ] **V2B-10** Deploy to Vercel; add `website/.env.example` and secret config.
+- [ ] **V2B-10** Deploy to **Vercel Hobby** (free) with `website/.env.example` and secret config. No custom-domain paid add-ons; free subdomain + Cloudflare-managed DNS on the student's own domain if available.
 
 **Exit:** 20 invited testers, one invite code each, complete the upload-to-PDF flow without needing help from the maintainer.
 
 ---
 
-### Phase V2-launch — Payments + admin + legal
+### Phase V2-launch — Open (free) signups + admin + legal
+
+> **Payments are permanently out of scope.** V2L-01 / V2L-02 / V2L-03 (Stripe / Razorpay / pricing page) were deleted on the free-tier pivot. Do **not** re-introduce them. If abuse pressure grows, tighten rate limits — do not add paid gating.
 
 **Deliverables:**
 
-- [ ] **V2L-01** Stripe Checkout + webhook (`POST /webhooks/stripe`) → promote user tier.
-- [ ] **V2L-02** Razorpay Hosted + webhook for INR; same tier promotion.
-- [ ] **V2L-03** Pricing page + plan comparison table.
-- [ ] **V2L-04** Admin routes (`/admin/*`) with role check: users list, analyses queue, abuse review, manual refund trigger.
-- [ ] **V2L-05** Legal pages reviewed by a human (disclaimer, data retention, refund policy).
+- [ ] **V2L-04** Admin routes (`/admin/*`) with role check: users list, analyses queue, abuse review, invite-code management, audit-log viewer.
+- [ ] **V2L-05** Legal pages published (disclaimer, data retention, privacy policy, terms, DPDP consent UI, academic-project notice). Review by a human before merge.
 - [ ] **V2L-06** DPDP + GDPR data export + delete endpoints (`GET /me/export`, `DELETE /me`).
-- [ ] **V2L-07** Open signups flag flipped.
+- [ ] **V2L-07** Open signups flag flipped (Turnstile + rate limits remain; invite code removed).
+- [ ] **V2L-08** Remove/hide any leftover UI referencing tiers, pricing, or upgrade CTAs. Grep gate in CI: `rg -n "stripe|razorpay|pricing|upgrade|premium" website/` must return 0 hits.
 
-**Exit:** a paying user (or yourself) can go from `/` → sign up → purchase → upload → report.
+**Exit:** any visitor can go from `/` → sign up (free) → upload → report; admin panel live; legal pages live; DPDP export + delete pass manual smoke test.
 
 ---
 
@@ -128,8 +128,8 @@ Each phase lists: **Goal**, **Deliverables (PR-sized)**, **Exit criteria**. Deli
 
 - [ ] **V3S-01** Celeb-DF v2 + DFDC preview formal runs; publish to `docs/TESTING.md` and About page.
 - [ ] **V3S-02** OpenTelemetry end-to-end (website traceparent → API → worker).
-- [ ] **V3S-03** Sentry SDK in website (client) + API (server).
-- [ ] **V3S-04** Prometheus scrape + Grafana dashboards: queue depth, inference p95/p99, error rate, active users.
+- [ ] **V3S-03** Sentry SDK in website (client) + API (server) on the **free Developer plan (5 k events/mo)**. Sample aggressively; never upgrade to paid.
+- [ ] **V3S-04** Prometheus metrics exported → **Grafana Cloud free tier** (10 k active series, 14-day retention); dashboards for queue depth, inference p95/p99, error rate, active users.
 - [ ] **V3S-05** Audit log table + admin viewer.
 - [ ] **V3S-06** Incident runbook in `docs/ADMIN.md`.
 - [ ] **V3S-07** 99 % uptime SLO + alerting.
@@ -162,9 +162,9 @@ Each phase must produce **one** demo you can record in < 90 s.
 | Phase | Demo |
 |-------|------|
 | V1-fix | Terminal: `python training/evaluate_detection_fusion.py …` → real AUC/F1 > 0.94/0.90 |
-| V2-alpha | Terminal: `docker compose up` + `curl` `POST /analyses` + poll + PDF opens |
+| V2-alpha | Terminal: `docker compose up` + `curl` `POST /v1/jobs` + poll + PDF opens |
 | V2-beta | Browser: land on `/`, click Demo, watch a bundled video analyse to PDF |
-| V2-launch | Browser: sign up → pay → upload → report; Stripe dashboard shows the charge |
+| V2-launch | Browser: sign up (free) → upload → report; admin panel shows the new user + their analysis |
 | V3-scale | Grafana tab: queue depth rising under load; Sentry tab: zero unhandled errors |
 | V3-robust | Browser: upload a heavily compressed clip, receive a verdict with a "low quality" caveat |
 | V4 | Android: install APK, upload via phone camera roll, receive push notification |
@@ -274,6 +274,7 @@ Close the loop with a one-paragraph summary in the PR:
 - Changing heatmap target layers without re-running the fixture tests.
 - Writing a comment that narrates the next line of code.
 - Closing an audit finding without the verification command.
+- **Adding any paid dependency, paid plan upgrade, or payment-processing code. If a service is not in [`FREE_STACK.md`](FREE_STACK.md), it does not belong in this project.**
 
 ---
 
@@ -297,10 +298,10 @@ Do **not** parallelise:
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|-----------|
-| GPU access delayed | Med | High — blocks V1-fix | Keep all CPU-safe paths green; run `evaluate_detection_fusion.py --limit` smoke runs; schedule L4 time in advance. |
-| FF++ dataset access wait | Med | High | Start the application immediately. Use Celeb-DF v2 as a smaller alternative for smoke runs. |
-| Student budget constraints | High | Med | Prefer Cloudflare Pages (free), Fly.io free tier, Neon Postgres free tier, Upstash Redis free tier, MinIO self-hosted on the L4 box. |
-| Legal posture for public site | Med | High | Launch behind invite list; don't take payments until `docs/SECURITY.md` + privacy policy reviewed. |
+| College L4 queue contention | Med | High — blocks V1-fix runs | Keep all CPU-safe paths green; queue jobs off-peak; **Kaggle free P100/T4 notebook** as documented fallback (see `FREE_STACK.md`). |
+| FF++ dataset — **access granted** | — | — | Dependency resolved. Cross-check split JSONs are committed; raw videos stay gitignored. |
+| Student budget constraints | High | Med | **Free-tier only, no exceptions.** Every service MUST appear in [`FREE_STACK.md`](FREE_STACK.md). Shed load via rate limits before ever considering a paid plan. |
+| Legal posture for public site | Med | High | Launch behind invite list; publish privacy/terms/DPDP consent + academic-project disclaimer before flipping open signups in V2-launch. No payments ever, so no refund / PCI surface to worry about. |
 | DSAN training instability | Low | Med | Gradient accumulation + AMP + early stopping already designed; W&B logs retained. |
 | Grad-CAM thread safety (BUG-001) | Med (under load) | Med | Fresh wrapper per request in V2-alpha (M-05). |
 | Cross-dataset generalisation bad | High | Med | Report honestly; plan V3-robust fine-tune. |

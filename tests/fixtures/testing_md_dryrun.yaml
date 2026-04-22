@@ -1,0 +1,36 @@
+# Dry-run fixture for scripts/report_testing_md.py — no W&B; exercises table rendering only.
+# Schema mirrors what the script expects for live W&B (structured metrics → same render path).
+
+detection:
+  auc: "0.9410"
+  accuracy: "91.2 %"
+  precision: "90.0 %"
+  recall: "91.5 %"
+  f1: "90.1 %"
+
+attribution:
+  overall_accuracy: "86.0 %"
+  macro_f1: "84.0 %"
+  per_method:
+    Deepfakes: "85.0 %"
+    Face2Face: "86.0 %"
+    FaceSwap: "86.0 %"
+    NeuralTextures: "85.0 %"
+
+ablation:
+  - {config: "RGB-only (B4 + CE)", accuracy: "0.80", macro_f1: "0.78", delta: "baseline"}
+  - {config: "Freq-only (R18 + CE)", accuracy: "0.79", macro_f1: "0.77", delta: "—"}
+  - {config: "Dual-stream + CE", accuracy: "0.83", macro_f1: "0.81", delta: "—"}
+  - {config: "Dual-stream + CE + SupCon (full DSAN v3)", accuracy: "0.86", macro_f1: "0.84", delta: "0"}
+  - {config: "Single-stream + SupCon", accuracy: "0.82", macro_f1: "0.80", delta: "—"}
+
+cross_dataset:
+  - {dataset: "Celeb-DF v2 smoke", slice: "100 videos", auc: "0.72", delta: "−0.20", notes: "TBD (V1F-12 GPU run) — dry-run example"}
+  - {dataset: "DFDC preview smoke", slice: "100 videos", auc: "0.70", delta: "−0.24", notes: "TBD (V1F-12 GPU run) — dry-run example"}
+
+robustness:
+  - {perturbation: "JPEG-40", auc: "TBD (V1F-11 GPU run)", delta: "TBD"}
+  - {perturbation: "Gaussian blur σ=1.5", auc: "TBD (V1F-11 GPU run)", delta: "TBD"}
+  - {perturbation: "Resize 144 px", auc: "TBD (V1F-11 GPU run)", delta: "TBD"}
+  - {perturbation: "Rotation 90°", auc: "TBD (V1F-11 GPU run)", delta: "TBD"}
+  - {perturbation: "Rotation 180°", auc: "TBD (V1F-11 GPU run)", delta: "TBD"}

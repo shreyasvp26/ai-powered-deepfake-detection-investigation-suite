@@ -79,7 +79,7 @@ BTech major project: **multi-signal** deepfake detection (spatial XceptionNet + 
 ## Documentation
 
 - **Canonical spec:** [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) (same content as `PROJECT_PLAN_v10.md` in this repo)
-- **Build order:** [docs/MASTER_IMPLEMENTATION.md](docs/MASTER_IMPLEMENTATION.md)
+- **Implementation plan:** [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)
 - **PRD:** [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)
 - **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 

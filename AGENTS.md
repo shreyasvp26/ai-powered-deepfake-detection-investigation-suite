@@ -4,6 +4,7 @@ Use these scopes when splitting AI-assisted work so changes stay coherent and re
 
 **Cross-cutting rules for every scope:**
 
+0. **FREE-TIER ONLY.** Every service, SDK, GPU host, analytics tool, email sender, or datastore MUST be on a free / free-tier / self-hosted plan listed in [`docs/FREE_STACK.md`](docs/FREE_STACK.md). **No payments, no Stripe/Razorpay, no Modal/RunPod/paid GPU, no Cloudflare Pro / Vercel Pro / Neon Pro / Upstash Pro, no subscription plumbing, no pricing page.** Any PR adding a paid dependency is rejected. If a quota is approached, tighten rate limits — never upgrade. See Cardinal Rule #0 in `Agent_Instructions.md`.
 1. Read `Agent_Instructions.md` at the repo root **before** opening any file — it is the master operating manual.
 2. Follow `docs/PROJECT_PLAN_v10.md` (engine v10.2 spec), `docs/IMPLEMENTATION_PLAN.md` (phase/workstream/PR rules), and `docs/ARCHITECTURE.md`.
 3. Respect pinned versions in `requirements.txt`; do not upgrade a library without an ADR-style note in `docs/CHANGELOG.md`.
@@ -60,7 +61,7 @@ Use these scopes when splitting AI-assisted work so changes stay coherent and re
 
 **Owns:** `src/report/report_generator.py`, `src/pipeline.py`.
 
-**Constraints:** Reports exclude blink score **Bs** (FIX-9). Must write `ENGINE_VERSION` + SHA256 of input video into the JSON report (V1F-03, BUG-008).
+**Constraints:** Reports exclude blink score **Bs** (FIX-9). JSON must include `ENGINE_VERSION`, `input_sha256`, `model_checksums`, and `seed` (V1F-03); PDF footer echoes engine + truncated `input_sha256`.
 
 **Plan refs:** `PROJECT_PLAN_v10.md` §12, §2.
 
@@ -76,7 +77,7 @@ Use these scopes when splitting AI-assisted work so changes stay coherent and re
 
 **Owns:** `api/` (FastAPI app, routers, `worker.py`, `models.py`, `schemas.py`, `queue.py`, `storage.py`), `api/tests/`.
 
-**Constraints:** FastAPI **0.115.x**, `uvicorn[standard]` worker, Redis + RQ for jobs, Postgres via SQLAlchemy 2.x. All endpoints accept `X-Request-ID`; no mutating endpoint runs synchronously — upload → job → poll. Must implement the error taxonomy in `docs/ARCHITECTURE.md` (typed `APIError` + `error.code`). File validation: SHA256 + magic-number + MIME + duration ≤ 60 s + size ≤ 200 MB.
+**Constraints:** FastAPI **0.115.x**, `uvicorn[standard]` worker, Redis + RQ for jobs, Postgres via SQLAlchemy 2.x. Public job API: **`/v1/jobs`**, health: **`/v1/healthz`**. All endpoints accept `X-Request-ID`; no mutating endpoint runs synchronously — upload → job → poll. Must implement the error taxonomy in `docs/ARCHITECTURE.md` (typed `APIError` + `error.code`). File validation: SHA256 + magic-number + MIME + duration ≤ 60 s + size ≤ 200 MB.
 
 **Plan refs:** `docs/ARCHITECTURE.md` V2, `docs/IMPLEMENTATION_PLAN.md` §3 (V2-alpha).
 
