@@ -127,6 +127,9 @@
 ## 7. Cross-references
 
 - Per-phase deliverable IDs: [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) §3.
+- **GPU session master plan (F001, F004, F005 flip to Implemented here): [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md).**
+- CPU-only work tracker: [`WORK_WITHOUT_CUDA.md`](WORK_WITHOUT_CUDA.md).
+- Free-tier infra discipline: [`FREE_STACK.md`](FREE_STACK.md).
 - Audit open items: [`AUDIT_REPORT.md`](AUDIT_REPORT.md).
 - Bugs: [`BUGS.md`](BUGS.md).
 - Change history: [`CHANGELOG.md`](CHANGELOG.md).

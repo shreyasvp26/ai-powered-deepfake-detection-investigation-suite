@@ -1,9 +1,14 @@
-## GPU Runbook (Phase 2–5) — execute when access returns
+## GPU Runbook (Phase 2–5) — terse cheatsheet
 
-This is the minimal sequence to go from “GPU access granted” to “Phase 5 detection benchmark complete”.
+> **Superseded by** [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) — the full master plan (dataset download → attribution → cross-dataset → robustness → ablations → `v1.0.0` tag, with agent-execution rules).
+>
+> This file is retained as a **commands-only cheatsheet** for the detection half (S-1…S-8 of the master plan). If you are executing the full V1 close-out, follow the master plan instead — it covers everything here plus 7 more steps and all the guardrails.
+
+This is the minimal sequence to go from "GPU access granted" to "Phase 5 detection benchmark complete".
 It mirrors `docs/PROJECT_PLAN_v10.md` Sections 5–9 and Phase checklist §16.
 
 **CPU-only work (no CUDA):** see [WORK_WITHOUT_CUDA.md](WORK_WITHOUT_CUDA.md).
+**Full agent-executable plan (preferred):** see [GPU_EXECUTION_PLAN.md](GPU_EXECUTION_PLAN.md).
 
 ### 0) One-time environment sanity
 

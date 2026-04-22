@@ -72,7 +72,7 @@ Do this once at the start of every session. Do **not** skip it because you "alre
 | Adding / changing a test                       | `docs/TESTING.md` → section matching your test type.                                                     |
 | Ops, deployment, secrets, incident response   | `docs/ADMIN.md`, `SECURITY.md`.                                                                          |
 | Working around missing CUDA                   | `docs/WORK_WITHOUT_CUDA.md`.                                                                             |
-| Doing a GPU run on the L4 box                 | `docs/GPU_RUNBOOK_PHASE2_TO_5.md`.                                                                       |
+| Doing a GPU run on the L4 box                 | **`docs/GPU_EXECUTION_PLAN.md`** (master, step-by-step, agent-executable). `docs/GPU_RUNBOOK_PHASE2_TO_5.md` is a legacy detection-only cheatsheet. |
 | Research / citation question                  | `docs/RESEARCH.md` (also has the "Dropped features" rationale).                                          |
 | "Where does file X live / what owns it?"     | `docs/FOLDER_STRUCTURE.md` + `AGENTS.md`.                                                                |
 | Ambiguous scope between two agents            | `AGENTS.md` → "Scope collisions" section (split into two PRs when possible).                              |
@@ -407,12 +407,17 @@ If any of these fails on a fresh venv with the repo's `requirements.txt`, fix th
 
 ### 11.3 Connecting to the L4 server
 
-Full procedure in `docs/GPU_RUNBOOK_PHASE2_TO_5.md`. Key points:
+**Full master procedure: [`docs/GPU_EXECUTION_PLAN.md`](docs/GPU_EXECUTION_PLAN.md)** — dataset download → weights → evals → `v1.0.0` tag, with §8 "Agent execution rules" and a failure-recovery playbook. Read it end-to-end before any GPU command.
 
+The legacy terse cheatsheet is `docs/GPU_RUNBOOK_PHASE2_TO_5.md` (detection half only, superseded).
+
+Box-hygiene reminders:
 - SSH key-based only. Never password.
-- `tmux` mandatory — training runs outlive the SSH session.
+- `tmux` mandatory — training runs outlive the SSH session; every step in the plan runs in a named tmux.
 - `nvidia-smi` in a second pane during any heavy run.
-- `df -h` and `du -sh /data/ff++` before extracting frames — the disk is small.
+- `df -h` before S-1 (FF++ download needs 120 GB free) and again after S-3.
+- Every long step writes to `logs/YYYY-MM-DD/<step-id>.log` via `tee`. Never rely on W&B alone (free-tier quota).
+- Weights never enter git. Only `models/CHECKSUMS.txt` + a free-tier object-store copy (Cloudflare R2 free or Backblaze B2 free).
 
 ### 11.4 The Flask inference API (V1, not V2)
 

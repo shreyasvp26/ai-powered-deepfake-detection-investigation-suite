@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com) loosely; versions 
 
 ## [Unreleased] — V1-fix in progress
 
+### Added — GPU execution master plan (2026-04-22)
+
+- **New doc [`docs/GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md)** — end-to-end, agent-executable plan covering FF++ download → face extraction → Spatial fine-tune → fusion LR → full detection benchmark → DSAN v3 attribution training → attribution eval → cross-dataset (Celeb-DF v2 / DFDC preview) → robustness (JPEG-40 / blur / rotation) → ablations → artifact hand-off → `v1.0.0` tag. Includes L4 time budget (S-0 … S-15, ~22–30 h total), priority tiers (MVP / Full V1 / Stretch), failure-recovery playbook, and §8 "Agent execution rules" designed for weaker auto agents (Cursor auto mode, Antigravity, etc.). Supersedes `docs/GPU_RUNBOOK_PHASE2_TO_5.md`, which is now marked legacy (detection half only).
+- **Cross-links updated** in `Agent_Instructions.md` (Rulebook §1 quick-ref + §11.3), `docs/FEATURES.md` §7, `docs/GPU_RUNBOOK_PHASE2_TO_5.md` header.
+- **Dataset acquisition documented** using the official TUM script `https://kaldir.vc.in.tum.de/faceforensics_download_v4.py` (c23, videos, 5 splits); FF++ videos remain git-ignored, only weight checksums are committed.
+
 ### Changed — free-tier-only pivot (academic project constraint)
 
 **Context:** this is a BTech student project with zero budget. Every paid service, subscription, or premium feature has been removed from scope, not deferred. FF++ dataset access has been granted; college L4 GPU is the primary inference host.
