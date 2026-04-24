@@ -19,7 +19,9 @@
 | BUG-005 | inference API (Flask) | M | `except Exception` returns raw string errors; no stable error schema. | V2-alpha: `ErrorCode` + `{code, message, hint}`; FR-70/71. | open |
 | BUG-006 | fusion layer | L | `joblib` + sklearn version drift; `fusion_lr` load can warn. | Add `sklearn_version` in report `technical`; pin sklearn in `requirements.txt` when stabilising. | open |
 | BUG-007 | requirements / NFR | L | Legacy 1 GB upload NFR vs free-tier caps; `REQUIREMENTS.md` already updated. | V2: move size limits to config; enforce per tier at the API. | open |
-| BUG-009 | training | H | Real multi-epoch L4 run with W&B, FF++ crops, and measured metrics (plan §10.11) is not the same as local scaffolding. | V1F-09+ / GPU: run L4, fill `docs/TESTING.md`, keep `--dry-run` / `--smoke-train` for CI. | open |
+| BUG-009 | training | H | Real multi-epoch L4 run with W&B, FF++ crops, and measured metrics (plan §10.11) is not the same as local scaffolding. | V1F-09+ / GPU: run L4 via **DSAN v3.1 Excellence pass** (`training/train_attribution_v31.py` + `configs/train_config_max.yaml`, see `docs/GPU_EXECUTION_PLAN.md` §S-9), fill `docs/TESTING.md`, keep `--dry-run` / `--smoke-train` for CI. | open |
+| BUG-015 | attribution (v3.1) | M | SBI synth uses a **pragmatic 5-landmark elliptical mask approximation** instead of a proper dlib 68-landmark convex hull (see `src/attribution/sbi.py`). Good enough for blend-boundary supervision but deviates from the Shiohara & Yamasaki CVPR'22 recipe. | V1.1 attribution research: optionally plug in `face_alignment` or dlib for exact 68-pt hull behind a flag; keep the 5-landmark path as a zero-dependency fallback. | open |
+| BUG-016 | attribution (v3.1) | L | Mask-IoU is reported from FF++ ground-truth masks only; SBI samples contribute to BCE loss but are intentionally excluded from the reported IoU (correct on purpose, but surprising to new contributors). | Document in `docs/TESTING.md` next to the mask-IoU row; no code change needed. | open |
 | BUG-010 | API / product | H | No background queue; long 60s + Grad-CAM jobs will time out. | V2-alpha: RQ/Redis (M-02). | open |
 | BUG-011 | preprocessing | M | No face quality gate. | V3-robust: `min_face_px` / `min_confidence` (F014). | open |
 | BUG-012 | evaluation | H | No cross-dataset eval vs `VISION` honesty. | V1F-12 smoke; V3S-01 full. | open |
@@ -67,6 +69,8 @@ Every new bug must be filed in **Open** (with all columns) before changing behav
 | BUG-012 | Yes | open |
 | BUG-013 | Yes | partial (engine/report/sha plumbing landed V1F-03/04) |
 | BUG-014 | Fixed section | CI; closed V1F-06 |
+| BUG-015 | Yes | open (SBI elliptical approximation; v1.1 candidate) |
+| BUG-016 | Yes | open (doc clarification only) |
 
 ## Definition of "done" (mirrors `AUDIT_REPORT.md` close-out)
 

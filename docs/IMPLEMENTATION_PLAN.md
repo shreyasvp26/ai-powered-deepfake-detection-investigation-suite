@@ -5,6 +5,8 @@
 >
 > Every phase is a set of **PR-sized deliverables**. An AI agent (including a cheaper model in Cursor auto mode) can pick the smallest pending item from the current phase and ship it end-to-end using the SDLC workflow in §5.
 
+> **V1-fix attribution deliverable upgraded to DSAN v3.1 (2026-04-22).** Phase 6 (Attribution) retains its PR IDs, but the model and training loop now follow the Excellence pass in [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) §9 & §12. v3.1 adds: EfficientNetV2-M RGB + ResNet-50 freq backbones, 64×64 blending-mask head (Face-X-ray), Self-Blended Images augmentation, Mixup + SWA + EMA + TTA + temperature calibration, and mixed-compression training (c23 + c40). Code is already landed pre-session (P-11 in the GPU plan): `src/attribution/attribution_model_v31.py`, `src/attribution/mask_decoder.py`, `src/attribution/sbi.py`, `src/attribution/mixup.py`, `src/attribution/ema.py`, `training/train_attribution_v31.py`, `scripts/fit_calibration.py`, `scripts/sbi_sample_dump.py`, `training/fit_fusion_xgb.py`, `configs/train_config_max.yaml`, and test files under `tests/test_attribution_v31.py` + `tests/test_calibration.py`. The v3 class (`DSANv3`) and its training script (`training/train_attribution.py`) are preserved verbatim for baseline reproducibility; do not delete them.
+
 ---
 
 ## 1. Product focus per phase

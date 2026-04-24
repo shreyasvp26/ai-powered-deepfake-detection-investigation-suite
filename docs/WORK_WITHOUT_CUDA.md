@@ -2,7 +2,22 @@
 
 This document lists **everything you can do without an NVIDIA GPU and without the remote L4 server**, with accurate commands and prerequisites. It complements [PROJECT_PLAN_v10.md](PROJECT_PLAN_v10.md) Section 3 (local vs remote) and the SDLC notes in Section 15.
 
-For **GPU-side** steps after access returns, see [GPU_RUNBOOK_PHASE2_TO_5.md](GPU_RUNBOOK_PHASE2_TO_5.md).
+For **GPU-side** steps after access returns, see [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) (master, v3.1 Excellence pass); [`GPU_RUNBOOK_PHASE2_TO_5.md`](GPU_RUNBOOK_PHASE2_TO_5.md) is a legacy cheatsheet for the detection half only.
+
+## DSAN v3.1 — CPU-safe tasks
+
+The v3.1 Excellence pass lives entirely in the repo today and can be exercised on CPU without any GPU or FF++ data:
+
+| Task | Command | Wall time |
+|------|---------|-----------|
+| DSAN v3.1 dry-run (random tensors, 1 fwd+bwd) | `python training/train_attribution_v31.py --dry-run --device cpu` | ~3 s |
+| DSAN v3.1 smoke-train (1 epoch × 2 batches, synthetic PNGs) | `python training/train_attribution_v31.py --smoke-train --device cpu` | ~7 s |
+| SBI visual-QA (needs a real-crop tree) | `python scripts/sbi_sample_dump.py --reals-root <dir> --out-dir sbi_qa --n-samples 20` | < 1 min |
+| Calibration unit tests | `pytest tests/test_calibration.py -q` | < 3 s |
+| Full v3.1 test suite | `pytest tests/test_attribution_v31.py -q` | ~15 s |
+| Verify v3 baseline still passes (regression check) | `pytest tests/test_attribution.py tests/test_train_attribution_smoke.py -q` | ~15 s |
+
+Before you ever touch the L4, run the first two commands and the last one in a clean venv — they fail closed if any v3.1 or v3 path is silently broken.
 
 ---
 

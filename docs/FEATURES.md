@@ -21,7 +21,7 @@
 | F002 | Temporal Analysis (4-feature) | **Implemented** | `src/modules/temporal.py` |
 | F003 | Blink Detection (MediaPipe EAR + XGBoost) | **Dropped** — weaker signal than temporal variance; see `docs/RESEARCH.md` §Dropped features | (removed from scope) |
 | F004 | Fusion Layer (`[Ss, Ts]` → LR + StandardScaler, `F=Ss` fallback) | **Implemented-architecture** (weights pending) | `src/fusion/`, `training/fit_fusion_lr.py`, `training/extract_fusion_features.py`, `training/optimize_fusion.py` |
-| F005 | Attribution (DSAN v3: EfficientNet-B4 + ResNet-18 + SRM + FFT + Gated Fusion) | **Implemented-architecture** (L4 multi-epoch run pending; full loop + `--smoke-train` + `tests/test_train_attribution_smoke.py`) | `src/attribution/*.py`, `training/train_attribution.py` |
+| F005 | Attribution (**DSAN v3.1**: EfficientNetV2-M + ResNet-50 + SRM + FFT + Gated Fusion + **auxiliary blending-mask head** (Face-X-ray-style) + **Self-Blended Images** augmentation + SWA + EMA + Mixup + TTA) | **Implemented-architecture** (L4 multi-epoch run on 4-day slot pending; v3 baseline loop + `--smoke-train` + `tests/test_train_attribution_smoke.py` in repo; v3.1 mask decoder, SBI module, SWA/EMA/TTA CLI, override flags — landing pre-session per `docs/GPU_EXECUTION_PLAN.md` §3 P-11) | `src/attribution/*.py`, `training/train_attribution.py`, `configs/train_config_max.yaml` |
 | F006 | Explainability (dual Grad-CAM++: spatial + frequency) | **Implemented** | `src/modules/explainability.py` |
 | F007 | Report Generator (JSON + PDF) | **Implemented** | `src/report/report_generator.py` |
 | F008 | Streamlit research console (5 pages) | **Implemented** | `app/streamlit_app.py`, `app/pages/`, `app/components/`, `app/sample_results/` |

@@ -30,6 +30,20 @@ Literature tied to [PROJECT_PLAN.md](PROJECT_PLAN.md) Section 27. Each entry: ci
 
 14. **Selvaraju et al., "Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization," ICCV 2017** — Theoretical basis for our Grad-CAM++ implementation targeting the last spatial Conv2d on EfficientNet-B4 and `layer4.conv2` on ResNet-18.
 
+15. **Li et al., "Face X-ray for More General Face Forgery Detection," CVPR 2020** — Introduces the *blending boundary* as a **manipulation-agnostic** supervision signal: any face-swap or reenactment leaves a seam, regardless of the generator. Direct inspiration for the DSAN v3.1 auxiliary **mask head** (`src/attribution/mask_decoder.py`) — it consumes the RGB stream's spatial map and regresses a 64×64 blending mask via BCE. This is the single biggest cross-dataset-generalisation lever in the Excellence pass (`docs/GPU_EXECUTION_PLAN.md` §12).
+
+16. **Shiohara & Yamasaki, "Detecting Deepfakes with Self-Blended Images," CVPR 2022** — **Self-Blended Images (SBI)**: synthesise pseudo-fakes from a single real face by blending a color/blur-perturbed copy of itself through a soft facial mask. No generator needed, no paired data needed, and the resulting detector is *state-of-the-art on cross-dataset benchmarks*. DSAN v3.1 uses SBI for ~20% of the real-sample budget (`src/attribution/sbi.py`, config `attribution.sbi` in `configs/train_config_max.yaml`). We adopt an **elliptical 5-landmark approximation** of the facial mask as a zero-dependency substitute for dlib's 68-point convex hull — see `BUG-015` for the trade-off.
+
+17. **Izmailov et al., "Averaging Weights Leads to Wider Optima and Better Generalization," UAI 2018** — **Stochastic Weight Averaging (SWA)**. In v3.1 we enable SWA over the last ~10 epochs to smooth noise from Mixup + SBI (`configs/train_config_max.yaml` → `training.swa`).
+
+18. **Polyak & Juditsky, "Acceleration of Stochastic Approximation by Averaging," SIAM J. Control Optim. 1992** (via the modern **EMA of weights** recipe popularised by MoCo / BYOL) — Used for the `ExponentialMovingAverage` shadow copy in `src/attribution/ema.py`; we evaluate `best` / `swa` / `ema` and pick the strongest on held-out (`docs/GPU_EXECUTION_PLAN.md` §S-10).
+
+19. **Zhang et al., "mixup: Beyond Empirical Risk Minimization," ICLR 2018** — Convex combination of inputs and labels; v3.1 applies Mixup (α = 0.2) to the classification head only, leaving the mask-BCE and SupCon heads untouched (`src/attribution/mixup.py`). Reduces overconfidence on seen FF++ methods and complements temperature scaling.
+
+20. **Guo et al., "On Calibration of Modern Neural Networks," ICML 2017** — Motivates **temperature scaling** as a post-hoc, single-parameter fix for overconfident softmax classifiers, and defines **Expected Calibration Error (ECE)** as the canonical diagnostic. v3.1 fits `T` on the val split via L-BFGS on NLL in `scripts/fit_calibration.py` and reports ECE before/after; the target is ECE ≤ 0.05 (`docs/TESTING.md`).
+
+21. **Chen & Guestrin, "XGBoost: A Scalable Tree Boosting System," KDD 2016** — Optional secondary fusion baseline (`training/fit_fusion_xgb.py`). Logistic Regression remains primary because it is interpretable and ships as a 4 kB `fusion_lr.pkl`; XGBoost is retained as a non-linear ceiling check that is skipped gracefully when the `xgboost` wheel is not installed.
+
 ---
 
 ## Dropped features — rationale

@@ -1,4 +1,9 @@
-"""Frequency stream: FFT features + 6-channel ResNet-18 (plan §10.6, V8-05)."""
+"""Frequency stream: FFT features + 6-channel ResNet trunk (plan §10.6, V8-05).
+
+v3 default: ``resnet18`` (returns 512-d). v3.1: ``resnet50`` (returns 2048-d
+native, projected down to 512 for gated fusion). Backwards compatible:
+default constructor signature unchanged.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +12,7 @@ import math
 import torch
 import torch.nn as nn
 import torchvision.models as models
-from torchvision.models import ResNet18_Weights
+from torchvision.models import ResNet18_Weights, ResNet50_Weights
 
 
 class FFTTransform(nn.Module):
@@ -32,27 +37,81 @@ class FFTTransform(nn.Module):
         return torch.cat([magnitude, phase_norm, power], dim=1)
 
 
-class FrequencyStream(nn.Module):
-    """Concat SRM (3ch) + FFT (3ch) → ResNet-18 trunk → ``(B, 512)``."""
+_SUPPORTED = {"resnet18", "resnet50"}
 
-    def __init__(self, *, imagenet_pretrained: bool = True) -> None:
+
+class FrequencyStream(nn.Module):
+    """Concat SRM (3ch) + FFT (3ch) → ResNet trunk → ``(B, out_dim)``.
+
+    Args:
+        imagenet_pretrained: Download ImageNet weights.
+        backbone: ``"resnet18"`` (v3 default, 512-d) or ``"resnet50"`` (v3.1, 2048-d native).
+        out_dim: Projection dimension. Forced to 512 when ``backbone=="resnet18"``
+            for backwards-compat (returns raw pooled features). With ResNet-50
+            a projection head maps 2048 → ``out_dim``.
+    """
+
+    def __init__(
+        self,
+        *,
+        imagenet_pretrained: bool = True,
+        backbone: str = "resnet18",
+        out_dim: int = 512,
+    ) -> None:
         super().__init__()
+        if backbone not in _SUPPORTED:
+            raise ValueError(f"backbone must be one of {_SUPPORTED}; got {backbone}")
+        self.backbone_name = str(backbone)
+
         self.fft = FFTTransform()
-        w = ResNet18_Weights.IMAGENET1K_V1 if imagenet_pretrained else None
-        resnet = models.resnet18(weights=w)
+
+        if backbone == "resnet18":
+            w = ResNet18_Weights.IMAGENET1K_V1 if imagenet_pretrained else None
+            resnet = models.resnet18(weights=w)
+            native_dim = 512
+        else:
+            w = ResNet50_Weights.IMAGENET1K_V2 if imagenet_pretrained else None
+            resnet = models.resnet50(weights=w)
+            native_dim = 2048
+
         orig = resnet.conv1
         resnet.conv1 = nn.Conv2d(6, 64, kernel_size=7, stride=2, padding=3, bias=False)
         with torch.no_grad():
             resnet.conv1.weight[:, :3] = orig.weight
             resnet.conv1.weight[:, 3:] = orig.weight.clone()
-        self.backbone = nn.Sequential(*list(resnet.children())[:-1])
-        self.feature_dim = 512
 
-    def forward(self, srm: torch.Tensor, gray_255: torch.Tensor) -> torch.Tensor:
+        self.backbone = nn.Sequential(*list(resnet.children())[:-2])
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.native_dim = native_dim
+        self.out_dim = int(out_dim)
+        if native_dim == out_dim:
+            self.proj: nn.Module = nn.Identity()
+        else:
+            self.proj = nn.Sequential(
+                nn.Linear(native_dim, self.out_dim),
+                nn.LayerNorm(self.out_dim),
+                nn.GELU(),
+            )
+        # Legacy attribute preserved for v3 callers (they read ``.feature_dim``).
+        self.feature_dim = self.out_dim
+
+    def forward(
+        self,
+        srm: torch.Tensor,
+        gray_255: torch.Tensor,
+        *,
+        return_spatial: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         fft_feats = self.fft(gray_255)
         srm = srm.to(gray_255.device)
         combined = torch.cat([srm, fft_feats], dim=1)
-        out = self.backbone(combined).squeeze(-1).squeeze(-1)
-        if out.shape[1] != 512:
-            raise RuntimeError(f"Expected 512-d freq features, got {out.shape}")
+        spatial = self.backbone(combined)
+        pooled = self.pool(spatial).flatten(1)
+        out = self.proj(pooled)
+        if out.shape[1] != self.out_dim:
+            raise RuntimeError(
+                f"Expected {self.out_dim}-d freq features, got {out.shape}"
+            )
+        if return_spatial:
+            return out, spatial
         return out

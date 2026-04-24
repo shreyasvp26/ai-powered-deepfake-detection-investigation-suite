@@ -24,7 +24,9 @@ Student-reality multiplier: **×2** most phases, **×3** on phases needing GPU q
 
 **Goal:** turn today's code-complete-but-unmeasured engine into a tagged `v1.0.0` with real numbers.
 
-**In:** finish training loop (H-03), populate `docs/TESTING.md` with FF++ identity-safe AUC / macro-F1 / ablation (C-01), embed engine version in every report (H-06), add CI (M-07), clean agent scopes (C-04, H-01).
+**In:** finish training loop (H-03 → attribution now follows `docs/GPU_EXECUTION_PLAN.md` §S-9 / DSAN v3.1 Excellence pass), populate `docs/TESTING.md` with FF++ identity-safe AUC / macro-F1 / ablation (C-01), embed engine version in every report (H-06), add CI (M-07), clean agent scopes (C-04, H-01).
+
+**Milestone:** before the 4-day L4 slot opens, the v3.1 Excellence-pass code is already green on CPU — `python training/train_attribution_v31.py --smoke-train --device cpu` succeeds, `pytest tests/test_attribution_v31.py tests/test_calibration.py -q` passes, and `configs/train_config_max.yaml` is the single source of truth for all attribution hyperparameters. The GPU slot is now purely *execution*, not *building*.
 
 **Out:** website, mobile, audio. **Never in scope at any phase:** payments, subscriptions, paid tiers.
 

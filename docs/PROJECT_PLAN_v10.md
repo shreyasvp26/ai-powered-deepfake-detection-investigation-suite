@@ -14,6 +14,19 @@
 
 ---
 
+> **Post-v10 amendments (2026-04-22) — binding.** The following items evolve beyond what is written in this document; where there is a conflict, the referenced file wins. This plan is otherwise preserved as the engine spec of record.
+>
+> 1. **Free-tier-only pivot (BTech academic project).** All paid hosts, paid GPUs, payment processors, pricing pages, and subscription plumbing are permanently out of scope. Single source of truth: [`FREE_STACK.md`](FREE_STACK.md). Architectural diagram and data model updated in [`ARCHITECTURE.md`](ARCHITECTURE.md). Cardinal Rule #0 in [`../Agent_Instructions.md`](../Agent_Instructions.md).
+> 2. **Attribution upgraded to DSAN v3.1 "Excellence pass"** for the 4-day / 380 GB L4 training slot. v3.1 = DSAN v3 + EfficientNetV2-M (RGB) + ResNet-50 (freq) + auxiliary blending-mask head (Face X-ray, CVPR'20) + Self-Blended Images augmentation (Shiohara & Yamasaki, CVPR'22) + Mixup + SWA + EMA + TTA + temperature scaling + XGBoost fusion secondary. Config: `configs/train_config_max.yaml`. Code: `src/attribution/attribution_model_v31.py`, `src/attribution/mask_decoder.py`, `src/attribution/sbi.py`, `src/attribution/mixup.py`, `src/attribution/ema.py`, `src/attribution/dataset_v31.py`, `training/train_attribution_v31.py`, `scripts/fit_calibration.py`, `training/fit_fusion_xgb.py`, `scripts/sbi_sample_dump.py`. DSAN v3 is retained for ablation reproducibility. Full rationale: [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) §12.
+> 3. **GPU execution is owned by [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md)**, not §16 of this document. The master plan covers S-0 → S-15, a 4-day day-wise schedule (§2.4), a preflight checklist (§3), per-step success checks and failure recovery (§7), agent execution rules (§8), and the artifact register (§5). [`GPU_RUNBOOK_PHASE2_TO_5.md`](GPU_RUNBOOK_PHASE2_TO_5.md) is now a detection-only cheatsheet.
+> 4. **Face-crop resolution and sampling** for attribution training upgrade to **380 px, 3 fps, 100 frames/video, mixed `c23` + `c40`**. The original 224 px / 1 fps figures elsewhere in this plan apply to the legacy spatial-only path only.
+> 5. **Blink detection stays dropped** (see §8 of this plan and [`RESEARCH.md`](RESEARCH.md) "Dropped features"). Do not re-introduce MediaPipe or XGBoost-for-blink under the guise of "completing the plan".
+> 6. **Testing targets updated** in [`TESTING.md`](TESTING.md) to reflect v3.1 Excellence targets (macro-F1 ≥ 0.94 on FF++, cross-dataset AUC targets on Celeb-DF v2 / DFDC preview, ECE ≤ 0.05, mask-IoU ≥ 0.45). The placeholder rows in this plan's §16 are superseded.
+>
+> For any task today: read [`../Agent_Instructions.md`](../Agent_Instructions.md) §0 first, then open [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) if you are about to touch the L4. This plan is the engine spec; those two files are the operating manual.
+
+---
+
 ## Table of Contents
 
 1. [Project Vision](#1-project-vision)

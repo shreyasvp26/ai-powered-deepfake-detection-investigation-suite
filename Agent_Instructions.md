@@ -10,7 +10,8 @@
 
 ## Table of contents
 
-1. [Cardinal rules — 12 non-negotiables](#1-cardinal-rules--12-non-negotiables)
+0. [**GPU-slot quickstart — if you were sent here to run the L4**](#0-gpu-slot-quickstart--if-you-were-sent-here-to-run-the-l4)
+1. [Cardinal rules — 13 non-negotiables](#1-cardinal-rules--13-non-negotiables)
 2. [Orientation — what to read, in what order](#2-orientation--what-to-read-in-what-order)
 3. [The universal task loop](#3-the-universal-task-loop)
 4. [How to pick your next task](#4-how-to-pick-your-next-task)
@@ -25,6 +26,91 @@
 13. [Common mistakes — a pre-flight checklist](#13-common-mistakes--a-pre-flight-checklist)
 14. [When you are stuck](#14-when-you-are-stuck)
 15. [Glossary — project-specific terms](#15-glossary--project-specific-terms)
+
+---
+
+## 0. GPU-slot quickstart — if you were sent here to run the L4
+
+> Read this section in full even if the owner told you "just start S-1". It is the shortest path to correctness and the cheapest way to not waste 4 days of GPU time.
+
+### 0.1 The single source of truth
+
+The L4 run is controlled by **[`docs/GPU_EXECUTION_PLAN.md`](docs/GPU_EXECUTION_PLAN.md)** (v2, Excellence pass, DSAN v3.1). That file — not this one, not `PROJECT_PLAN_v10.md`, not the legacy `GPU_RUNBOOK_PHASE2_TO_5.md` — is where you read **what** to run, **in what order**, **how to verify success**, and **how to recover from failure**. The sections you cannot skip:
+
+| § in `GPU_EXECUTION_PLAN.md` | Why |
+|------------------------------|-----|
+| §1 — Cardinal rules (GPU) | Nine guardrails; breaking any one wastes hours. |
+| §2 — Budget and priority tiers | Confirms the 4-day / ~60 GPU-hour budget and that **Excellence is the default tier**. |
+| §2.4 — Day-wise schedule | Your tmux plan for Day 1 → Day 4. |
+| §3 — Preflight checklist (P-0 … P-13) | Blocks you from starting S-1 with half-installed code. |
+| §4 — S-0 → S-15 step table | The actual commands. Each step has "what it does", "commands", "success checks", "failure modes". |
+| §5 — Artifact register | The set of files that must exist when you tag `v1.0.0`. |
+| §7 — Failure-recovery playbook | Read **before** you hit a failure, not after. |
+| §8 — Agent execution rules | How you log, checkpoint, hash, and hand back to the owner. |
+| §12 — DSAN v3.1 innovation rationale | **Read this** so you don't "refactor away" the mask head or SBI thinking they are dead code. They are the two biggest cross-dataset generalisation levers in the project. |
+
+### 0.2 What DSAN v3.1 is (and why it exists)
+
+DSAN v3.1 is the production attribution model. It is DSAN v3 plus five additions that each have a paper behind them (see `docs/RESEARCH.md` entries 15-21):
+
+1. **EfficientNetV2-M** (RGB backbone) — replaces EfficientNet-B4.
+2. **ResNet-50** (frequency backbone) — replaces ResNet-18.
+3. **Auxiliary blending-mask head** — a small UNet-style decoder (`src/attribution/mask_decoder.py`) that regresses a 64×64 blending mask from the RGB stream's spatial feature map, supervised by BCE. Manipulation-agnostic signal (Face X-ray, CVPR'20).
+4. **Self-Blended Images (SBI)** — on-the-fly pseudo-fakes synthesised from real crops (`src/attribution/sbi.py`) at 20% ratio, contributing to the mask BCE head only (`cls_mask = 0`). Shiohara & Yamasaki, CVPR'22.
+5. **Training recipe upgrades** — Mixup (α = 0.2), SWA over the last ~10 epochs, EMA shadow weights, TTA at eval, and post-hoc temperature scaling via L-BFGS on NLL.
+
+All five are toggled through `configs/train_config_max.yaml`. **Do not change that file without owner sign-off** — it is the hyperparameter contract for the L4 run.
+
+### 0.3 The map from plan → code
+
+If you are running a step in `GPU_EXECUTION_PLAN.md`, this is the code you will touch:
+
+| Plan step | Entry point | Config / inputs | Outputs |
+|-----------|-------------|-----------------|---------|
+| S-3 Face-crop extraction | `training/extract_faces_batch.py` | MTCNN, 380 px, 3 fps, 100 frames/video, `c23` + `c40` | `data/processed/faces/<method>/<compression>/...` |
+| S-4 DataLoader profile | `training/train_attribution_v31.py --dry-run` | `configs/train_config_max.yaml` | timing log |
+| S-5a v3.1 smoke | `training/train_attribution_v31.py --smoke-train` | `configs/train_config_max.yaml` | 1 mini-batch fwd+bwd on GPU |
+| S-5b Spatial Xception joint 4-class | `training/train_spatial_xception.py` (c23 + c40 mix) | `configs/train_config.yaml` | `models/xception_joint_c23c40.pth` |
+| S-5c EfficientNetV2-S baseline | `training/train_spatial_effnetv2s.py` | — | `models/effnetv2s_joint.pth` |
+| S-6 Fusion feature extraction | `training/extract_fusion_features.py` | S-5b weights | `models/fusion_features_*.npz` |
+| S-7 Fusion fit (LR + XGB) | `training/fit_fusion_lr.py`, `training/fit_fusion_xgb.py` | fusion features | `models/fusion_lr.pkl`, `models/fusion_xgb.pkl` (optional) |
+| S-8 Detection benchmark | `training/evaluate_detection_fusion.py` | all detection weights | `docs/TESTING.md` rows |
+| S-8.5 SBI sample QA | `scripts/sbi_sample_dump.py --n-samples 20` | `data/processed/faces/original/c23` | `qa/sbi/*.png` — eyeball before S-9 |
+| **S-9 DSAN v3.1 training** | `training/train_attribution_v31.py` | `configs/train_config_max.yaml` | `models/dsan_v31/{best,swa,ema}.pt`, `models/dsan_v31/history.json` |
+| S-10a v3.1 eval (best / swa / ema) | `training/train_attribution_v31.py --eval-only --tta` | v3.1 weights | per-method confusion matrix, macro-F1 |
+| S-10c Calibration | `scripts/fit_calibration.py` | winning v3.1 weights | `models/dsan_v31/temperature.json`, ECE before/after |
+| S-11 Cross-dataset | `training/evaluate_cross_dataset.py` | Celeb-DF v2, DFDC preview, (WildDeepfake optional) | cross-dataset AUC / macro-F1 |
+| S-12 Robustness sweep | `training/robustness_sweep.py` | 12 perturbation combos | robustness table |
+| S-13 Ablations (6 runs) | `training/train_attribution_v31.py --override <key>=<val>` | `configs/train_config_max.yaml` with one flag off | six `history.json` sets |
+| S-14 Hash + sync | `scripts/hash_models.sh`, free-tier object storage upload | `models/*.pt` | `models/CHECKSUMS.txt` |
+| S-15 Tag | `git tag engine-v1.0.0` | all above | release |
+
+### 0.4 The CPU smoke sequence you must run before going to the L4
+
+On the Mac (or any CPU box) in a clean venv, run **every** line below; if any fails, fix it **before** touching the L4:
+
+```bash
+pip install -r requirements.txt
+python -c "import src.pipeline, src.attribution.attribution_model, src.attribution.attribution_model_v31; print('import OK')"
+python training/train_attribution.py --dry-run --device cpu        # v3 regression
+python training/train_attribution_v31.py --dry-run --device cpu     # v3.1 regression
+python training/train_attribution_v31.py --smoke-train --device cpu # v3.1 forward+backward
+pytest -q -m "not gpu and not weights"                              # full CPU suite
+```
+
+Only when all five commands are green do you `ssh l4` and open `docs/GPU_EXECUTION_PLAN.md` §2.4 for your day's plan.
+
+### 0.5 Things you must not do during the GPU slot
+
+- Do **not** invent a new training config. Every knob lives in `configs/train_config_max.yaml`. Ablations flip a single key with `--override`.
+- Do **not** replace the 5-landmark elliptical SBI mask with dlib/`face_alignment` mid-run. That is a v1.1 item (`BUG-015`). The current path is deliberate and tested.
+- Do **not** delete the v3 baseline (`training/train_attribution.py`, `src/attribution/attribution_model.py`). It is kept for ablation reproducibility.
+- Do **not** push model weights (`.pt`, `.pth`, `.pkl`) to git. Only `models/CHECKSUMS.txt`.
+- Do **not** leave a training run outside `tmux`. SSH drops kill bare processes.
+- Do **not** silently skip a failed "success check" in `GPU_EXECUTION_PLAN.md` §4. Stop, diagnose, follow §7 playbook, and log.
+- Do **not** upgrade `torch`, `timm`, `xgboost`, or any pinned package on the L4 box. Pins are frozen for the duration of the run.
+
+If a live decision has no playbook entry, **pause the run, write the question to the owner per §14 below, and wait**. One lost hour beats one lost day.
 
 ---
 
@@ -145,10 +231,13 @@ This section gets stale. When you suspect it is wrong, trust the files on disk, 
 
 ### 5.2 What exists as code but cannot be run end-to-end
 
-- **Full DSAN v3 training loop** — `training/train_attribution.py` has `--dry-run` only. **No trained weights exist** in `models/`. (BUG-007, V1F-05.)
+- **DSAN v3 baseline training loop** — `training/train_attribution.py` has `--dry-run` only. Retained for ablation reproducibility. (BUG-009.)
+- **DSAN v3.1 Excellence-pass training loop** — `training/train_attribution_v31.py` is **code-complete and CPU-smoke-green** (mask head, SBI, Mixup, SWA, EMA, TTA, multi-task loss, `--dry-run`, `--smoke-train`, `--eval-only`, `--resume`, `--override`). The **multi-day L4 run** is the open item — scheduled in `docs/GPU_EXECUTION_PLAN.md` §S-9. **No trained v3.1 weights exist yet.**
+- **Temperature-scaling calibration** — `scripts/fit_calibration.py` is complete + unit-tested; waits on v3.1 weights.
+- **XGBoost fusion baseline** — `training/fit_fusion_xgb.py` is complete + smoke-tested (skips gracefully if `xgboost` wheel is absent).
 - **Spatial detector** — code is complete, **no FF++ c23 trained Xception weights** are checked in. Pipeline returns stubbed scores.
 - **Fusion LR** — code is complete, `configs/fusion_weights.yaml` has placeholder coefficients.
-- **GPU evaluation scripts** (`evaluate_spatial_xception.py`, `evaluate_detection_fusion.py`) — run only on the Linux L4 server against extracted face crops.
+- **GPU evaluation scripts** (`evaluate_spatial_xception.py`, `evaluate_detection_fusion.py`, `evaluate_cross_dataset.py`, `robustness_sweep.py`) — run only on the Linux L4 server against extracted face crops.
 
 ### 5.3 What does not exist yet
 
@@ -201,15 +290,16 @@ Use the matching playbook. If none matches, fall back to §3 (universal loop).
 ### 6.3 Train or re-train a model
 
 1. **Do this only on the L4 GPU server.** Never kick off a real training run on the Mac.
-2. Ensure the training script has:
+2. **If the task is DSAN v3.1 (the default attribution training today), skip this generic recipe and follow [`docs/GPU_EXECUTION_PLAN.md`](docs/GPU_EXECUTION_PLAN.md) §S-9 literally** — it is far more specific and specifies SBI warm-up, SWA/EMA schedule, mask-head LR, and the override flags for the six ablations. The quickstart in §0 of this file maps plan-step → code.
+3. For any other trainer, ensure the script has:
    - CLI flag `--dry-run` that exercises one step of the loop on two mini-batches, on CPU (for unit tests).
    - `--seed 42` default.
    - `wandb` logging with a project tag matching the phase (`deepfake-v1-fix`, `deepfake-v2-alpha`, …).
-3. Before launching: `bash scripts/preflight.sh` (or equivalent) to check GPU is free, disk has > 50 GB, `wandb login` is valid.
-4. Launch inside `tmux`. Log file path is `runs/<phase>/<utc-timestamp>/train.log`.
-5. On completion: copy weights to `models/` with a descriptive name (`dsan_v3_ff++_c23_seed42.pt`), write its `.sha256`, add a row to `models/README.md`.
-6. Run `training/evaluate_*.py` against the held-out split; paste numbers into `docs/TESTING.md` § "Results".
-7. Bump `ENGINE_VERSION` in `src/__init__.py` (or wherever it lives) — trained artefacts are part of the contract.
+4. Before launching: `bash scripts/preflight.sh` (or equivalent) to check GPU is free, disk has > 50 GB, `wandb login` is valid.
+5. Launch inside `tmux`. Log file path is `runs/<phase>/<utc-timestamp>/train.log`.
+6. On completion: copy weights to `models/` with a descriptive name (`dsan_v31_ff++_c23c40_seed42.pt`), write its `.sha256`, add a row to `models/README.md`.
+7. Run `training/evaluate_*.py` against the held-out split; paste numbers into `docs/TESTING.md` § "Results".
+8. Bump `ENGINE_VERSION` in `src/__init__.py` — trained artefacts are part of the contract (v3.1 weights landing → bump `Yb`).
 
 ### 6.4 Close a V1-fix deliverable (`V1F-XX`)
 
@@ -407,7 +497,7 @@ If any of these fails on a fresh venv with the repo's `requirements.txt`, fix th
 
 ### 11.3 Connecting to the L4 server
 
-**Full master procedure: [`docs/GPU_EXECUTION_PLAN.md`](docs/GPU_EXECUTION_PLAN.md)** — dataset download → weights → evals → `v1.0.0` tag, with §8 "Agent execution rules" and a failure-recovery playbook. Read it end-to-end before any GPU command.
+**Full master procedure: [`docs/GPU_EXECUTION_PLAN.md`](docs/GPU_EXECUTION_PLAN.md)** (v2 — Excellence pass, DSAN v3.1). Covers dataset download → weights → evals → `v1.0.0` tag, with §2.4 day-wise schedule (4-day L4 slot), §8 "Agent execution rules", §7 failure-recovery playbook, and **§12 innovation rationale** (the "why" behind the mask head + SBI — required reading so an agent doesn't "fix" the mask head thinking it's a bug). Read end-to-end before any GPU command; ~60 min one-time.
 
 The legacy terse cheatsheet is `docs/GPU_RUNBOOK_PHASE2_TO_5.md` (detection half only, superseded).
 
@@ -489,7 +579,11 @@ Never: invent a new feature to "unblock", silently disable a test, or merge with
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | **FF++** / **FaceForensics++**| Primary training dataset; c23 H.264 compression; four manipulation methods.                                     |
 | **c23**                       | FF++ compression level 23; default quality tier.                                                                |
-| **DSAN v3**                   | Dual-Stream Attribution Network v3 — RGB EfficientNet-B4 + frequency ResNet-18 with SRM/FFT, gated fusion.     |
+| **DSAN v3**                   | Dual-Stream Attribution Network v3 — RGB EfficientNet-B4 + frequency ResNet-18 with SRM/FFT, gated fusion. Retained as the ablation baseline. |
+| **DSAN v3.1** / **Excellence pass** | Production attribution model. v3 plus EfficientNetV2-M, ResNet-50, an auxiliary blending-mask head (Face X-ray-style), Self-Blended Images augmentation, Mixup, SWA, EMA, TTA, and temperature scaling. Configured in `configs/train_config_max.yaml`; trained by `training/train_attribution_v31.py`; rationale in `docs/GPU_EXECUTION_PLAN.md` §12. |
+| **SBI**                       | Self-Blended Images — a real face blended with a color/blur-perturbed copy of itself through an elliptical facial mask, used as a pseudo-fake for the mask-head BCE loss. See `src/attribution/sbi.py`. |
+| **Mask head**                 | Auxiliary UNet-style decoder (`src/attribution/mask_decoder.py`) on DSAN v3.1 that regresses a 64×64 blending mask from the RGB stream's spatial feature map; supervises cross-dataset generalisation. |
+| **SWA / EMA / TTA / ECE**     | Stochastic Weight Averaging, Exponential Moving Average of weights, Test-Time Augmentation, Expected Calibration Error. v3.1 evaluates `best` / `swa` / `ema` checkpoints and fits a temperature `T` to target ECE ≤ 0.05. |
 | **SRM**                       | Steganalysis Rich Model filters — high-pass residual features fed to the frequency stream.                      |
 | **Grad-CAM++**                | Gradient-based class activation map used for spatial + frequency heatmap overlay (dual CAM).                   |
 | **Ss / Ts / Bs / F**          | Spatial score / Temporal score / Blink score (dropped) / Fusion score.                                          |

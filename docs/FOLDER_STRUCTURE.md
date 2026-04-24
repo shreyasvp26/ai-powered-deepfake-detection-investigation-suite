@@ -20,6 +20,11 @@
 | `docker-compose.yml` | Local stack: API + worker + Postgres + Redis + MinIO (V2A-08) |
 | `.dockerignore` | Excludes venv, website, `models/`, `data/`, etc. from API image build |
 | `scripts/docker-smoke.sh` | `docker compose` happy path: POST /v1/jobs → poll until `done` |
+| `scripts/fit_calibration.py` | Temperature scaling + ECE for DSAN v3.1 classifier (S-10c) |
+| `scripts/sbi_sample_dump.py` | CPU diagnostic: dump N SBI (original, blended, mask) triplets for visual QA before S-9 |
+| `scripts/hash_models.sh` | Re-compute `models/CHECKSUMS.txt` after any weight update |
+| `scripts/export_openapi.py` | Serialise FastAPI OpenAPI spec to `api/openapi.json` |
+| `scripts/report_testing_md.py` | Render live results into `docs/TESTING.md` after a GPU run |
 | `.pre-commit-config.yaml` | black / isort / flake8 hooks |
 | `.gitignore` | Python, venv, data, models, node_modules, `.env*` |
 | `.flake8` | flake8 config (line length 100) |
@@ -71,7 +76,8 @@
 
 | Path | Purpose |
 |------|---------|
-| `train_config.yaml` | DSAN v3 training (attribution) |
+| `train_config.yaml` | DSAN v3 training (attribution) — baseline, referenced by `training/train_attribution.py` |
+| `train_config_max.yaml` | **DSAN v3.1 Excellence pass** — single source of truth for production attribution training, referenced by `training/train_attribution_v31.py` and `scripts/fit_calibration.py` |
 | `inference_config.yaml` | Runtime inference (temporal weights, sampling) |
 | `fusion_weights.yaml` | Fusion weights (weighted-sum baseline) |
 
@@ -101,14 +107,20 @@ src/
 │   ├── temporal.py                   # TemporalAnalyzer
 │   └── explainability.py             # dual Grad-CAM++
 ├── attribution/
-│   ├── __init__.py
-│   ├── dataset.py                    # DSANDataset + SRM in loader
-│   ├── rgb_stream.py                 # EfficientNet-B4, global_pool=''
-│   ├── freq_stream.py                # FFTTransform + ResNet-18
+│   ├── __init__.py                   # re-exports v3 and v3.1 classes
+│   ├── dataset.py                    # DSANDataset (v3) + SRM in loader
+│   ├── dataset_v31.py                # DSANv31Dataset — FF++ masks + SBI mixin (v3.1)
+│   ├── rgb_stream.py                 # EfficientNet-B4 (v3 default) or tf_efficientnetv2_m (v3.1)
+│   ├── freq_stream.py                # FFT + ResNet-18 (v3) or ResNet-50 (v3.1)
 │   ├── gated_fusion.py               # gate(concat(rgb, freq))
-│   ├── attribution_model.py          # DSANv3
+│   ├── attribution_model.py          # DSANv3 (baseline, retained for ablation)
+│   ├── attribution_model_v31.py      # DSANv31 — production, with mask head
+│   ├── mask_decoder.py               # 64×64 blending-mask decoder (Face-X-ray-style)
+│   ├── sbi.py                        # Self-Blended Images augmentation (CVPR 2022)
+│   ├── mixup.py                      # Mixup helper for the v3.1 classification head
+│   ├── ema.py                        # ExponentialMovingAverage wrapper (v3.1 weight averaging)
 │   ├── gradcam_wrapper.py            # dual target layers; SRM not thread-safe (BUG-001)
-│   ├── losses.py                     # SupConLoss + DSANLoss
+│   ├── losses.py                     # SupConLoss + DSANLoss (v3) + DSANv31Loss (multi-task, v3.1)
 │   └── samplers.py                   # StratifiedBatchSampler
 ├── fusion/
 │   ├── __init__.py
@@ -141,7 +153,9 @@ src/
 | `evaluate_spatial_xception.py` | Spatial-only per-method eval |
 | `evaluate_detection_fusion.py` | Full detection + fusion eval |
 | `profile_dataloader.py` | DataLoader timing |
-| `train_attribution.py` | DSAN v3 training loop (V1F-05 scaffold + GPU runbook) |
+| `train_attribution.py` | **DSAN v3** training loop (baseline; V1F-05 scaffold + legacy runbook). Retained for ablation reproducibility |
+| `train_attribution_v31.py` | **DSAN v3.1** training loop — Excellence pass, consumes `configs/train_config_max.yaml`; owns SBI + mask head + Mixup + SWA + EMA + TTA + eval-only + override + resume flags |
+| `fit_fusion_xgb.py` | XGBoost fusion baseline (secondary to `fit_fusion_lr.py`); optional, skipped when `xgboost` not installed |
 | `evaluate_cross_dataset.py` | *(V1F-12, V3S-01)* Celeb-DF / DFDC; ``--cpu-stub`` for plumbing |
 | `visualize_embeddings.py` | *(planned)* t-SNE export (substitute today: `app/sample_results/embeddings_tsne.csv`) |
 
@@ -271,7 +285,10 @@ mobile/
 | `test_spatial.py` | SpatialDetector |
 | `test_temporal.py` | TemporalAnalyzer |
 | `test_fusion.py` | FusionLayer + LR + fallback |
-| `test_attribution.py` | DSAN v3 forward + loss shapes |
+| `test_attribution.py` | DSAN v3 forward + loss shapes (baseline) |
+| `test_attribution_v31.py` | DSAN v3.1: mask decoder, SBI determinism, Mixup, EMA, multi-task loss, CLI smoke |
+| `test_calibration.py` | Temperature-scaling unit tests for `scripts/fit_calibration.py` |
+| `test_fit_fusion_xgb.py` | XGBoost fusion CLI smoke (skips if `xgboost` not installed) |
 | `test_explainability.py` | Grad-CAM dual output (skips without `pytorch-grad-cam`) |
 | `test_pipeline.py` | Integration on crops fixture |
 | `test_api_client.py` | Streamlit API client |

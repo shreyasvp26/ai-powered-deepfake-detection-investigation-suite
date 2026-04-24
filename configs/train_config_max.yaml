@@ -1,0 +1,113 @@
+# DSAN v3.1 — Excellence pass training config (GPU_EXECUTION_PLAN.md §S-9, §12).
+# This is the ONLY config used by training/train_attribution_v31.py.
+# The legacy v3 config (configs/train_config.yaml) is kept for smoke tests and
+# reproducing the pre-v3.1 baseline; do not edit it to match v3.1.
+#
+# Reading order for agents:
+#   1. docs/GPU_EXECUTION_PLAN.md §12 — why every block below looks the way it does
+#   2. this file
+#   3. training/train_attribution_v31.py — how each key is consumed
+
+attribution:
+  version: v3_1
+
+  model:
+    rgb_backbone: tf_efficientnetv2_m   # timm name; falls back to efficientnet_b4 if OOM (§7)
+    freq_backbone: resnet50              # torchvision name; falls back to resnet18 if OOM
+    fused_dim: 512
+    num_classes: 4                       # DF / F2F / FS / NT — unchanged from v3
+    pretrained: true
+    mask_head:
+      enabled: true
+      out_size: 64                       # 64 x 64 blending-mask prediction (Face-X-ray-style)
+      hidden_dim: 256
+      lambda_mask: 0.3                   # multi-task weight — ablation A3 sets to 0
+
+  sbi:
+    # Self-Blended Images (Shiohara & Yamasaki, CVPR 2022) — pseudo-fakes synthesised from
+    # real crops on-the-fly. Used only for MASK-HEAD supervision in v3.1 (classification
+    # head remains clean on FF++ labels). See src/attribution/sbi.py for the exact recipe.
+    enabled: true
+    ratio: 0.20                          # fraction of each batch replaced with SBI samples
+    mask_type: elliptical                # elliptical | landmark (landmark needs insightface)
+    color_jitter:
+      brightness: 0.15
+      contrast: 0.15
+      saturation: 0.10
+    blur_sigma: [0.5, 1.5]               # uniform random range on the donor-copy
+    mask_blur_sigma: [3.0, 7.0]          # boundary softness (pixels); larger => softer blend
+
+  training:
+    epochs: 60
+    warm_restart_epoch: 30               # cosine warm-restart at this epoch
+    batch_size: 16                       # V2-M + R50 + mask head fits at 16 on L4 24 GB
+    gradient_accumulation_steps: 6       # effective batch = 96
+    num_workers: 8
+    pin_memory: true
+    prefetch_factor: 4
+    sampler: stratified_batch
+    mixed_precision: true
+    swa:
+      enabled: true
+      start_epoch: 50
+      anneal_epochs: 5
+    ema:
+      enabled: true
+      decay: 0.999
+    mixup:
+      enabled: true
+      alpha: 0.2
+    tta:
+      enabled: true
+      transforms: [center_crop, hflip]   # applied at eval; disabled during training
+    early_stopping:
+      enabled: true
+      monitor: val_macro_f1
+      patience: 10
+      mode: max
+
+  optimizer:
+    type: adamw
+    backbone_lr: 7.0e-6                  # slightly lower than v3 because V2-M is bigger
+    head_lr: 2.0e-4
+    mask_head_lr: 2.0e-4
+    weight_decay: 1.0e-4
+
+  scheduler:
+    type: cosine_warm_restart
+    warmup_epochs: 3
+    T_0: 30
+    T_mult: 1
+    min_lr: 1.0e-7
+
+  loss:
+    alpha: 1.0                           # CE weight (only on FF++ samples)
+    beta: 0.2                            # SupCon weight (only on FF++ samples)
+    temperature: 0.15
+    mask_pos_weight: 2.0                 # BCE pos weight (blending boundaries are minority)
+
+  augmentation:
+    horizontal_flip: true
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.1
+    random_erasing:
+      probability: 0.1
+
+  data:
+    crop_dir: data/processed/faces
+    masks_dir: data/FaceForensics++/manipulated_sequences
+    train_split: data/splits/train_identity_safe.json
+    val_split: data/splits/val_identity_safe.json
+    test_split: data/splits/test_identity_safe.json
+    originals_dir_name: original                # directory name for SBI source (real crops)
+    methods: [Deepfakes, Face2Face, FaceSwap, NeuralTextures]
+    compressions: [c23, c40]
+    compression_mix: [0.7, 0.3]
+    frames_per_video: 100
+    image_size: 380                             # V2-M native input resolution
+
+  normalization:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]

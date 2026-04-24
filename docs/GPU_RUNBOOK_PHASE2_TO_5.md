@@ -1,8 +1,8 @@
 ## GPU Runbook (Phase 2–5) — terse cheatsheet
 
-> **Superseded by** [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) — the full master plan (dataset download → attribution → cross-dataset → robustness → ablations → `v1.0.0` tag, with agent-execution rules).
+> **Superseded by** [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) — the full master plan (dataset download → **DSAN v3.1 Excellence pass** → cross-dataset → robustness → six ablations → `v1.0.0` tag, with agent-execution rules, a 4-day day-wise schedule, and §12 innovation rationale for the mask head + SBI).
 >
-> This file is retained as a **commands-only cheatsheet** for the detection half (S-1…S-8 of the master plan). If you are executing the full V1 close-out, follow the master plan instead — it covers everything here plus 7 more steps and all the guardrails.
+> This file is retained as a **commands-only cheatsheet** for the detection half (S-1…S-8 of the master plan) and the legacy DSAN v3 baseline. **Do not run DSAN v3.1 training from this file** — use [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) §S-5a, §S-9, §S-10 instead, which consume `configs/train_config_max.yaml` and `training/train_attribution_v31.py`. If you are executing the full V1 close-out, follow the master plan instead — it covers everything here plus the attribution Excellence pass, cross-dataset, robustness, ablations, and calibration.
 
 This is the minimal sequence to go from "GPU access granted" to "Phase 5 detection benchmark complete".
 It mirrors `docs/PROJECT_PLAN_v10.md` Sections 5–9 and Phase checklist §16.

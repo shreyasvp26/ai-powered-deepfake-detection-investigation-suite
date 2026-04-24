@@ -15,7 +15,7 @@ This is a **living** document. Every closed item must list the PR / commit and t
 | Metric | State |
 |--------|-------|
 | Engine implementation | **code-complete** (all modules in `src/` exist and pass dry-runs) |
-| Trained weights on disk | **partial** — Xception `full_c23.p` pending, DSAN v3 checkpoints not yet produced |
+| Trained weights on disk | **partial** — Xception `full_c23.p` pending, DSAN v3.1 checkpoints not yet produced (architecture + CPU smoke green in repo; production training queued for the 4-day L4 slot per `docs/GPU_EXECUTION_PLAN.md`) |
 | Real benchmarks in `docs/TESTING.md` | **TBD** — every metric row is a placeholder |
 | Public website | **not started** (this is the V2 scope) |
 | Authentication (magic-link) | **not started** (V2-beta). No payment surface exists — permanently out of scope. |
@@ -37,7 +37,8 @@ The project is in a healthy **engine-complete, product-not-started** state. The 
 | Spatial detection (XceptionNet loader + detector) | `src/modules/spatial.py`, `src/modules/network/xception*.py` | ✅ (weights TBD) |
 | Temporal (4-feature) | `src/modules/temporal.py` | ✅ |
 | Fusion (LR + StandardScaler + fallback) | `src/fusion/fusion_layer.py`, `training/fit_fusion_lr.py`, `training/extract_fusion_features.py`, `training/optimize_fusion.py` | ✅ |
-| Attribution DSAN v3 (streams, gated fusion, losses, samplers, dataset, Grad-CAM wrapper) | `src/attribution/*.py` | ✅ architecture + dry-run; training run TBD |
+| Attribution DSAN v3 baseline (streams, gated fusion, losses, samplers, dataset, Grad-CAM wrapper) | `src/attribution/*.py` | ✅ architecture + dry-run; training run TBD |
+| Attribution DSAN v3.1 Excellence pass (V2-M + R50 + mask head + SBI + Mixup + EMA + SWA + TTA + calibration) | `src/attribution/attribution_model_v31.py`, `src/attribution/mask_decoder.py`, `src/attribution/sbi.py`, `src/attribution/mixup.py`, `src/attribution/ema.py`, `src/attribution/dataset_v31.py`, `training/train_attribution_v31.py`, `scripts/fit_calibration.py`, `scripts/sbi_sample_dump.py`, `training/fit_fusion_xgb.py`, `configs/train_config_max.yaml`, `tests/test_attribution_v31.py`, `tests/test_calibration.py` | ✅ architecture + dry-run + smoke-train green; L4 training run queued per `docs/GPU_EXECUTION_PLAN.md` §S-9 |
 | Explainability (dual Grad-CAM++) | `src/modules/explainability.py` | ✅ |
 | Report generator (JSON + PDF) | `src/report/report_generator.py` | ✅ |
 | Pipeline glue | `src/pipeline.py` (crops + raw video paths) | ✅ |
@@ -141,6 +142,8 @@ The project is in a healthy **engine-complete, product-not-started** state. The 
 ---
 
 ### H-03 — Attribution training has never been run end-to-end
+
+> **Status update (2026-04-22).** The attribution baseline is now split into v3 (`training/train_attribution.py`, retained) and **v3.1 Excellence pass** (`training/train_attribution_v31.py`). The v3.1 code path landed in full — mask head, SBI, Mixup, SWA, EMA, TTA, multi-task loss, calibration script, XGBoost baseline, and unit + CLI smoke tests (`tests/test_attribution_v31.py`, `tests/test_calibration.py`). The **full multi-day L4 training run** is the remaining open item and is scheduled as `docs/GPU_EXECUTION_PLAN.md` §S-9. CLOSE once the run produces `models/dsan_v31/best.pt` (or `winner.pt`) + updated `docs/TESTING.md` numbers.
 
 **Problem:** `training/train_attribution.py` only implements `--dry-run`; the actual training loop body is not wired beyond a forward/backward on random tensors. The plan §10.11 describes the full loop (AMP, warmup, gradient accumulation, SupCon), and the agent scope claims it is "owned". Reality: the loop is a stub.
 

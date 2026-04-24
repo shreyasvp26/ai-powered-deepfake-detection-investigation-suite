@@ -3,6 +3,8 @@
 > Source of truth for the system shape.
 > Partner docs: [`PROJECT_PLAN_v10.md`](PROJECT_PLAN_v10.md) §2 & §15 (engine), [`WEBSITE_PLAN.md`](WEBSITE_PLAN.md) (web), [`ADMIN.md`](ADMIN.md) (ops).
 
+> **Attribution architecture (v3 → v3.1, 2026-04-22).** The attribution module is the *Dual-Stream Attribution Network* — DSAN. v3 (EfficientNet-B4 + ResNet-18 + SRM + FFT + gated fusion + SupCon) remains as a reproducible baseline and lives in `src/attribution/attribution_model.py`. The production model is **DSAN v3.1** ("Excellence pass"): EfficientNetV2-M RGB stream + ResNet-50 frequency stream + **auxiliary blending-mask head** (Face-X-ray-style, 64 × 64) + **Self-Blended Images (SBI) augmentation** at 20 % of batch + SWA + EMA + Mixup + TTA + temperature calibration. Rationale, citations, and rejected alternatives are in [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) §12. Code: `src/attribution/attribution_model_v31.py`, `src/attribution/mask_decoder.py`, `src/attribution/sbi.py`, `src/attribution/ema.py`, `src/attribution/mixup.py`, `training/train_attribution_v31.py`, config `configs/train_config_max.yaml`.
+
 ---
 
 ## 1. Architectural stages
@@ -51,7 +53,8 @@ Spatial             Temporal
                    │
                    ▼
               MODULE 4
-              Attribution (DSAN v3: RGB stream + Freq/SRM/FFT stream + Gated Fusion)
+              Attribution (DSAN v3.1: EfficientNetV2-M + ResNet-50 + SRM + FFT
+                           + Gated Fusion + Face-X-ray-style mask head + SBI)
                    │
                    ▼
               MODULE 5
@@ -75,7 +78,8 @@ Spatial             Temporal
 | SpatialDetector | `src/modules/spatial.py` | Face crop BGR | Per-frame `p(fake)`, aggregate `Ss` |
 | TemporalAnalyzer | `src/modules/temporal.py` | Per-frame `p(fake)` list | `Ts` + diagnostics |
 | FusionLayer | `src/fusion/fusion_layer.py` | `Ss`, `Ts`, `n_frames` | `F`, verdict, `used_fallback` |
-| DSANv3 | `src/attribution/attribution_model.py` | RGB + SRM tensors | 4-class logits + embedding |
+| DSANv3 (baseline, kept for ablation) | `src/attribution/attribution_model.py` | RGB + SRM tensors | 4-class logits + embedding |
+| DSANv31 (production) | `src/attribution/attribution_model_v31.py` | RGB + SRM tensors | 4-class logits + embedding + 64×64 mask logits |
 | ExplainabilityModule | `src/modules/explainability.py` | RGB + SRM + target class | Spatial + frequency heatmaps |
 | ReportGenerator | `src/report/report_generator.py` | Analysis dict | JSON + PDF paths |
 | Pipeline | `src/pipeline.py` | Crops dir or video path | Unified analysis dict |

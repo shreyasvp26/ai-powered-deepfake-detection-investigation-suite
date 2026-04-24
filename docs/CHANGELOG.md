@@ -7,11 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com) loosely; versions 
 
 ## [Unreleased] — V1-fix in progress
 
-### Added — GPU execution master plan (2026-04-22)
+### Added — GPU execution master plan + DSAN v3.1 Excellence pass (2026-04-22)
 
-- **New doc [`docs/GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md)** — end-to-end, agent-executable plan covering FF++ download → face extraction → Spatial fine-tune → fusion LR → full detection benchmark → DSAN v3 attribution training → attribution eval → cross-dataset (Celeb-DF v2 / DFDC preview) → robustness (JPEG-40 / blur / rotation) → ablations → artifact hand-off → `v1.0.0` tag. Includes L4 time budget (S-0 … S-15, ~22–30 h total), priority tiers (MVP / Full V1 / Stretch), failure-recovery playbook, and §8 "Agent execution rules" designed for weaker auto agents (Cursor auto mode, Antigravity, etc.). Supersedes `docs/GPU_RUNBOOK_PHASE2_TO_5.md`, which is now marked legacy (detection half only).
-- **Cross-links updated** in `Agent_Instructions.md` (Rulebook §1 quick-ref + §11.3), `docs/FEATURES.md` §7, `docs/GPU_RUNBOOK_PHASE2_TO_5.md` header.
-- **Dataset acquisition documented** using the official TUM script `https://kaldir.vc.in.tum.de/faceforensics_download_v4.py` (c23, videos, 5 splits); FF++ videos remain git-ignored, only weight checksums are committed.
+- **New doc [`docs/GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) (v2 — Excellence pass).** End-to-end, agent-executable plan covering FF++ download → face extraction → Spatial fine-tune → fusion LR → full detection benchmark → **DSAN v3.1** attribution training → attribution eval → cross-dataset (Celeb-DF v2 / DFDC preview) → robustness sweep → **6 full-retrain ablations** → artifact hand-off → `v1.0.0` tag. Includes new **§2.4 day-wise schedule** (4-day L4 slot, ~60 GPU-h real work + 12 h slack on 380 GB disk), priority tiers (MVP / Full V1 / **Excellence** as default), failure-recovery playbook, **§8 agent-execution rules** for weaker auto agents (Cursor auto mode, Antigravity, etc.), and **§12 innovation rationale** with CVPR-grounded citations. Supersedes `docs/GPU_RUNBOOK_PHASE2_TO_5.md` (legacy, detection-only cheatsheet).
+- **Attribution architecture upgraded: DSAN v3 → DSAN v3.1.**
+  - RGB backbone: EfficientNet-B4 → **EfficientNetV2-M**
+  - Freq backbone: ResNet-18 → **ResNet-50**
+  - **New auxiliary blending-mask head** (UNet decoder, λ=0.3, supervised by FF++ masks) — generalisation + native explainability upgrade (Li et al., "Face X-ray", CVPR 2020).
+  - **New Self-Blended Images augmentation** at 20 % of real class per batch — proven cross-dataset lift (Shiohara & Yamasaki, CVPR 2022).
+  - Mixed-compression training: 70 % c23 + 30 % c40.
+  - **SWA** (epochs 50–60) + **EMA** (decay 0.999) + **Mixup** (α=0.2) + **TTA** (5-crop + hflip) + **temperature calibration** (target ECE ≤ 0.05).
+  - Schedule: 60 epochs with cosine + 1 warm restart at epoch 30.
+- **Detection upgraded:** Xception → **joint 4-class Xception** on c23+c40 mix with SWA (one model, not four). Added **EfficientNetV2-S** spatial baseline for reporting comparison.
+- **Fusion:** LR primary (interpretable) + **XGBoost secondary baseline** added for reporting.
+- **Ablations expanded:** 4-row proxy → **6 full-retrain ablations** (no-SRM, no-FFT, no-gated, no-SupCon, no-Mixup, rgb-only).
+- **Robustness expanded:** 3 perturbations → **12-combination sweep** (JPEG × 4, blur × 3, rotation × 3, noise × 2, downsample × 2) with AUC curves.
+- **Cross-dataset:** full Celeb-DF v2 (if access) + DFDC preview + optional WildDeepfake.
+- **Commit targets:** FF++ c23 attribution macro-F1 **0.90** (v3 was 0.82); CDFv2 cross-dataset AUC **0.78** (v3 report-only); ECE ≤ **0.05**.
+- **Cross-links updated** in `Agent_Instructions.md` (new **§0 "GPU-slot quickstart"** + §5.2 state snapshot + §6.3 train playbook + glossary rows for DSAN v3.1 / SBI / Mask head / SWA-EMA-TTA-ECE), `docs/FEATURES.md` F005 row, `docs/GPU_RUNBOOK_PHASE2_TO_5.md` header (explicit "do not run v3.1 from this file"), `docs/FOLDER_STRUCTURE.md` (`configs/train_config_max.yaml`, `training/train_attribution_v31.py`, `training/fit_fusion_xgb.py`, `scripts/fit_calibration.py`, `scripts/sbi_sample_dump.py`, all three new test files), `docs/WORK_WITHOUT_CUDA.md` (v3.1 CPU smoke/dry-run/SBI-QA commands), `docs/AUDIT_REPORT.md` (H-03 reframed; v3.1 row added), `docs/ROADMAP.md` (V1-fix milestone wording), `docs/BUGS.md` (new `BUG-015` SBI-elliptical approximation, `BUG-016` mask-IoU reporting caveat), `docs/RESEARCH.md` (new refs 15-21: Face X-ray, SBI, SWA, Polyak-EMA, Mixup, temp-scaling/ECE, XGBoost), and `docs/PROJECT_PLAN_v10.md` header banner (post-v10 amendments block).
+- **Dataset acquisition** documented using the official TUM script `https://kaldir.vc.in.tum.de/faceforensics_download_v4.py` (c23 + **c40** + **masks**, videos); data remain git-ignored, only weight checksums committed.
+- **Code landing pre-session (P-11 in plan):** `src/attribution/mask_decoder.py`, `src/attribution/sbi.py`, multi-task loss wiring, SWA/EMA/TTA/override CLI flags in `training/train_attribution.py`, joint-class + SWA + compression-mix flags in `training/evaluate_spatial_xception.py`, `training/fit_fusion_xgb.py`, `scripts/fit_calibration.py`, `scripts/sbi_sample_dump.py`, `configs/train_config_max.yaml`, perturbation-sweep support in `training/evaluate_robustness.py` — each with unit tests.
 
 ### Changed — free-tier-only pivot (academic project constraint)
 

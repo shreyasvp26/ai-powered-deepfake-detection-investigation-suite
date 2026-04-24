@@ -3,6 +3,8 @@
 > Test strategy, methodology, and live results.
 > Targets are fixed in [`REQUIREMENTS.md`](REQUIREMENTS.md) §3 and [`PROJECT_PLAN_v10.md`](PROJECT_PLAN_v10.md) §17.
 
+> **Attribution targets updated for DSAN v3.1 (2026-04-22).** The published target table in §4 and the ablation table in §5 reference the Excellence-pass model documented in [`GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) §12. v3 numbers (if any are held on-disk from smoke runs) are retained in §5 as the "DSAN v3 (baseline)" row for the ablation study. CPU tests for the v3.1 code path live in `tests/test_attribution_v31.py` and `tests/test_calibration.py`; the v3 smoke suite (`tests/test_attribution.py`, `tests/test_train_attribution_smoke.py`) is unchanged.
+
 ---
 
 ## 1. Testing pyramid
@@ -122,30 +124,41 @@ Tables between `<!-- auto:results:start -->` and `<!-- auto:results:end -->` (§
 
 ---
 
-## 4. Results — attribution (DSAN v3, fake-only, identity-safe)
+## 4. Results — attribution (DSAN v3.1, fake-only, identity-safe)
 
-| Metric | Target | Result |
-|--------|--------|--------|
-| Overall accuracy | ≥ 85 % | TBD |
-| Macro F1 | ≥ 83 % | TBD |
-| Deepfakes accuracy | ≥ 85 % | TBD |
-| Face2Face accuracy | ≥ 85 % | TBD |
-| FaceSwap accuracy | ≥ 85 % | TBD |
-| NeuralTextures accuracy | ≥ 85 % | TBD |
+| Metric | Target (DSAN v3.1 "Excellence") | Target (DSAN v3 baseline, retained) | Result |
+|--------|-------------------------------|-------------------------------------|--------|
+| Overall accuracy (FF++ c23) | ≥ 90 % | ≥ 85 % | TBD |
+| Macro F1 (FF++ c23) | ≥ 90 % | ≥ 83 % | TBD |
+| Macro F1 (FF++ c40, compressed) | ≥ 83 % | — | TBD |
+| Per-class accuracy (DF / F2F / FS / NT) | ≥ 88 % each | ≥ 85 % each | TBD |
+| Expected Calibration Error (ECE, 15 bins) | ≤ 0.05 | — | TBD |
+| Cross-dataset AUC (Celeb-DF v2) | ≥ 0.78 | report-only | TBD |
+| Mask-head IoU (validation) | ≥ 0.35 | — | TBD |
+
+Measurement notes:
+- FF++ c23 and c40 are evaluated on the same identity-safe test split.
+- ECE computed by `scripts/fit_calibration.py`; target evaluated *after* T-scaling.
+- Cross-dataset numbers come from S-11 of `docs/GPU_EXECUTION_PLAN.md`.
+- Mask-head IoU is a diagnostic sanity metric, not a shipped contract — it protects the multi-task training from silently degenerating.
 
 ---
 
-## 5. Ablation study (plan §10.12)
+## 5. Ablation study (DSAN v3.1, GPU_EXECUTION_PLAN §S-13)
 
-| Configuration | Accuracy | Macro F1 | Δ vs full |
-|--------------|---------|---------|-----------|
-| RGB-only (B4 + CE) | TBD | TBD | baseline |
-| Freq-only (R18 + CE) | TBD | TBD | — |
-| Dual-stream + CE | TBD | TBD | — |
-| Dual-stream + CE + SupCon (full DSAN v3) | TBD | TBD | 0 |
-| Single-stream + SupCon | TBD | TBD | — |
+Six full-retrain ablations are executed on the L4 (~7 h each). All use the same seed, same splits, and identical data pipelines — only the listed component changes.
 
-*Identity-safe splits: full DSAN target ≈ 86–89 % overall (not 92–95 %).*
+| Configuration | Macro F1 (c23) | ECE (after T) | Δ vs full | Owner |
+|---------------|----------------|---------------|-----------|-------|
+| Full DSAN v3.1 (reference) | TBD | TBD | 0 | `winner.pt` |
+| no-SRM (freq stream drops SRM channels) | TBD | TBD | TBD | A1 |
+| no-FFT (freq stream drops FFT channels) | TBD | TBD | TBD | A2 |
+| no-gated (mean-pool fusion instead of gated) | TBD | TBD | TBD | A3 |
+| no-SupCon (CE + mask only) | TBD | TBD | TBD | A4 |
+| no-Mixup (α=0) | TBD | TBD | TBD | A5 |
+| rgb-only (no frequency stream) | TBD | TBD | TBD | A6 |
+
+Historical v3-era ablations (from pre-v3.1 smoke runs) are archived in PR #TBD for reference and not included in the v1.0.0 tag.
 
 ---
 
@@ -221,7 +234,9 @@ Five to ten real examples (after GPU runs), each with:
 **Quick reminders:**
 
 - `pytest tests/ -v` on CPU always runs.
-- `python training/train_attribution.py --dry-run` on CPU always runs.
+- `python training/train_attribution.py --dry-run` on CPU always runs (v3 baseline path).
+- `python training/train_attribution_v31.py --dry-run` on CPU always runs (v3.1 production path; < 30 s).
+- `python training/train_attribution_v31.py --smoke-train` on CPU (1 epoch × 2 batches, synthetic PNG crops, SBI + mask head + Mixup + EMA exercised end-to-end; < 60 s).
 - `python training/extract_fusion_features.py --stub-spatial` avoids needing `full_c23.p`.
 - `python training/evaluate_detection_fusion.py --limit N` for smoke runs.
 - Full FF++ benchmarks: L4 server only.
