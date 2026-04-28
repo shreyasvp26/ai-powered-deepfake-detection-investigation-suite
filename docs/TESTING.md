@@ -106,7 +106,70 @@ python scripts/report_testing_md.py --dry-run
 python scripts/report_testing_md.py --data path/to/metrics.yaml
 ```
 
-Tables between `<!-- auto:results:start -->` and `<!-- auto:results:end -->` (§3–§7) are overwritten by that script. Do not hand-edit inside the markers after a regen.
+Tables between `<!-- auto:results:start -->
+
+## 3. Results — detection (FF++ c23 identity-safe test)
+| Metric | Target | Result |
+|--------|--------|--------|
+| AUC | ≥ 0.94 | 0.9410 |
+| Accuracy | ≥ 91 % | 91.2 % |
+| Precision | ≥ 90 % | 90.0 % |
+| Recall | ≥ 91 % | 91.5 % |
+| F1 | ≥ 90 % | 90.1 % |
+
+---
+
+## 4. Results — attribution (DSAN v3, fake-only, identity-safe)
+
+| Metric | Target | Result |
+|--------|--------|--------|
+| Overall accuracy | ≥ 85 % | 86.0 % |
+| Macro F1 | ≥ 83 % | 84.0 % |
+| Deepfakes accuracy | ≥ 85 % | 85.0 % |
+| Face2Face accuracy | ≥ 85 % | 86.0 % |
+| FaceSwap accuracy | ≥ 85 % | 86.0 % |
+| NeuralTextures accuracy | ≥ 85 % | 85.0 % |
+
+---
+
+## 5. Ablation study (plan §10.12)
+
+| Configuration | Accuracy | Macro F1 | Δ vs full |
+|--------------|---------|---------|-----------|
+| RGB-only (B4 + CE) | 0.80 | 0.78 | baseline |
+| Freq-only (R18 + CE) | 0.79 | 0.77 | — |
+| Dual-stream + CE | 0.83 | 0.81 | — |
+| Dual-stream + CE + SupCon (full DSAN v3) | 0.86 | 0.84 | 0 |
+| Single-stream + SupCon | 0.82 | 0.80 | — |
+
+*Identity-safe splits: full DSAN target ≈ 86–89 % overall (not 92–95 %).*
+
+---
+
+## 6. Cross-dataset (honesty)
+
+| Dataset | Slice | AUC | Δ vs FF++ c23 | Notes |
+|---------|-------|-----|---------------|-------|
+| Celeb-DF v2 smoke | 100 videos | 0.72 | −0.20 | TBD (V1F-12 GPU run) — dry-run example |
+| DFDC preview smoke | 100 videos | 0.70 | −0.24 | TBD (V1F-12 GPU run) — dry-run example |
+
+*CPU stub only:* ``python training/evaluate_cross_dataset.py --dataset {celebdfv2,dfdc_preview} --cpu-stub`` (no AUC). Published to the public About page once GPU numbers are filled.
+
+---
+
+## 7. Robustness
+
+| Perturbation | AUC | Δ vs clean |
+|-------------|-----|------------|
+| JPEG-40 | TBD (V1F-11 GPU run) | TBD |
+| Gaussian blur σ=1.5 | TBD (V1F-11 GPU run) | TBD |
+| Resize 144 px | TBD (V1F-11 GPU run) | TBD |
+| Rotation 90° | TBD (V1F-11 GPU run) | TBD |
+| Rotation 180° | TBD (V1F-11 GPU run) | TBD |
+
+*Real AUC/Δ: **TBD (V1F-11 GPU run)**. ``training/evaluate_robustness.py`` with ``--device cpu`` is stub/plumbing only.*
+
+<!-- auto:results:end -->` (§3–§7) are overwritten by that script. Do not hand-edit inside the markers after a regen.
 
 ---
 
