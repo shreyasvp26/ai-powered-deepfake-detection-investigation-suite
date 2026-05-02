@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com) loosely; versions 
 
 ## [Unreleased] — V1-fix in progress
 
+### Added - local GPU smoke test for Kaggle fallback prep
+
+- Added `scripts/smoke_test_local.py`, a CUDA-only DSAN v3.1 smoke test that reuses the training config override parser, builds the EfficientNet-B4 + ResNet-18 demo model, runs one AMP forward/backward pass on synthetic tensors, reports CUDA memory, and optionally validates two real FF++ crop DataLoader batches before Kaggle fallback training.
+
 ### Added — GPU execution master plan + DSAN v3.1 Excellence pass (2026-04-22)
 
 - **New doc [`docs/GPU_EXECUTION_PLAN.md`](GPU_EXECUTION_PLAN.md) (v2 — Excellence pass).** End-to-end, agent-executable plan covering FF++ download → face extraction → Spatial fine-tune → fusion LR → full detection benchmark → **DSAN v3.1** attribution training → attribution eval → cross-dataset (Celeb-DF v2 / DFDC preview) → robustness sweep → **6 full-retrain ablations** → artifact hand-off → `v1.0.0` tag. Includes new **§2.4 day-wise schedule** (4-day L4 slot, ~60 GPU-h real work + 12 h slack on 380 GB disk), priority tiers (MVP / Full V1 / **Excellence** as default), failure-recovery playbook, **§8 agent-execution rules** for weaker auto agents (Cursor auto mode, Antigravity, etc.), and **§12 innovation rationale** with CVPR-grounded citations. Supersedes `docs/GPU_RUNBOOK_PHASE2_TO_5.md` (legacy, detection-only cheatsheet).
