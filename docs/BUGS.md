@@ -16,6 +16,7 @@
 | BUG-002 | explainability | L | `pytorch-grad-cam` may be missing; `test_explainability` skips. | Enforce Python 3.10 and documented optional install in `docs/TESTING.md` / plan §4. | open |
 | BUG-003 | dashboard (Streamlit) | L | Long videos run `Pipeline` in-process and block the UI; MTCNN is slow on CPU. | Use HTTP API + GPU for demos; keep local as debug-only. | open |
 | BUG-004 | evaluation scripts | L | Inconsistent CLIs: `evaluate_spatial_xception` uses `--max-frames`, `evaluate_detection_fusion` uses `--limit`, easy to confuse. | Unify to `--limit`; keep `--max-frames` as deprecated alias. | open |
+| BUG-005 | inference API | M | `except Exception` returns raw string errors; no stable error schema. | V2-alpha FastAPI typed ErrorCode schema implemented for application errors; missing global exception handlers for 422/500 framework errors. | partial |
 | BUG-006 | fusion layer | L | `joblib` + sklearn version drift; `fusion_lr` load can warn. | Add `sklearn_version` in report `technical`; pin sklearn in `requirements.txt` when stabilising. | open |
 | BUG-009 | training | H | Real multi-epoch L4 run with W&B, FF++ crops, and measured metrics (plan §10.11) is not the same as local scaffolding. | V1F-09+ / GPU: run L4 via **DSAN v3.1 Excellence pass** (`training/train_attribution_v31.py` + `configs/train_config_max.yaml`, see `docs/GPU_EXECUTION_PLAN.md` §S-9), fill `docs/TESTING.md`, keep `--dry-run` / `--smoke-train` for CI. | open |
 | BUG-015 | attribution (v3.1) | M | SBI synth uses a **pragmatic 5-landmark elliptical mask approximation** instead of a proper dlib 68-landmark convex hull (see `src/attribution/sbi.py`). Good enough for blend-boundary supervision but deviates from the Shiohara & Yamasaki CVPR'22 recipe. | V1.1 attribution research: optionally plug in `face_alignment` or dlib for exact 68-pt hull behind a flag; keep the 5-landmark path as a zero-dependency fallback. | open |
@@ -29,7 +30,6 @@
 
 | ID | Area | Description | Proposed fix (when closed) | Status |
 |----|------|-------------|------------------------------|--------|
-| BUG-005 | inference API | `except Exception` returns raw string errors; no stable error schema. | V2-alpha FastAPI typed ErrorCode schema; V2A-02. | closed |
 | BUG-007 | requirements / NFR | Legacy 1 GB upload NFR vs free-tier caps. | Enforced 200MB limit at API via `settings.max_upload_bytes`; V2A-02. | closed |
 | BUG-008 | AGENTS / docs | Stale `MASTER_IMPLEMENTATION` links confused agents. | Point to `PROJECT_PLAN.md` + `IMPLEMENTATION_PLAN.md`; remove stale doc; V1F-01. | closed |
 | BUG-014 | ci | No GitHub Action running tests on PRs. | Add `.github/workflows/ci.yml` + `pytest` markers; V1F-06. | closed |
@@ -59,7 +59,7 @@ Every new bug must be filed in **Open** (with all columns) before changing behav
 | BUG-002 | Yes | open |
 | BUG-003 | Yes | open |
 | BUG-004 | Yes | open |
-| BUG-005 | Fixed section | closed via V2-alpha FastAPI |
+| BUG-005 | Yes | partial (application errors fixed, missing framework handlers) |
 | BUG-006 | Yes | open |
 | BUG-007 | Fixed section | closed via V2-alpha settings |
 | BUG-008 | Fixed section | was AGENTS/MASTER; closed V1F-01 |
