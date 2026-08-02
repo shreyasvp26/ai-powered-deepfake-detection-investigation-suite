@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from fpdf import FPDF
@@ -35,6 +37,19 @@ def _commit_job(session: Session, job: Job) -> None:
     job.updated_at = datetime.now(timezone.utc)
     session.add(job)
     session.commit()
+
+
+_pipeline = None
+
+
+def _get_pipeline() -> Any:
+    global _pipeline
+    if _pipeline is None:
+        from src.pipeline import Pipeline
+
+        _pipeline = Pipeline()
+        _pipeline.load_models()
+    return _pipeline
 
 
 def run_job(job_id: str) -> None:
@@ -86,8 +101,48 @@ def run_job(job_id: str) -> None:
                 except Exception:  # noqa: BLE001 — best-effort; local + S3/MinIO
                     pass
             else:
-                job.state = JobState.failed.value
-                job.error_message = "inference not wired (set MOCK_ENGINE=1 or deploy V2A-06)"
+                from api.storage import get_storage_for_settings
+                from src.report.report_generator import ReportGenerator
+
+                storage = get_storage_for_settings(settings)
+
+                video_bytes = storage.get_object(job.input_storage_key)
+                suffix = ".bin"
+                if job.original_filename:
+                    ext = Path(job.original_filename).suffix
+                    if ext:
+                        suffix = ext
+
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    tmp_dir_path = Path(tmpdir)
+                    tmp_video = tmp_dir_path / f"input{suffix}"
+                    tmp_video.write_bytes(video_bytes)
+
+                    pipeline = _get_pipeline()
+                    result_data = pipeline.run_on_video(str(tmp_video))
+
+                    generator = ReportGenerator()
+                    report_paths = generator.generate(result_data, tmp_dir_path)
+
+                    json_bytes = Path(report_paths["json_path"]).read_bytes()
+                    pdf_bytes = Path(report_paths["pdf_path"]).read_bytes()
+
+                    rj = f"reports/{job_id}/report.json"
+                    rp = f"reports/{job_id}/report.pdf"
+
+                    storage.put_object(rj, json_bytes, "application/json")
+                    storage.put_object(rp, pdf_bytes, "application/pdf")
+
+                    job.result_json = result_data
+                    job.report_json_key = rj
+                    job.report_pdf_key = rp
+                    job.state = JobState.done.value
+                    job.error_message = None
+
+                try:
+                    storage.delete_object(job.input_storage_key)
+                except Exception:  # noqa: BLE001 — best-effort; local + S3/MinIO
+                    pass
         except Exception as e:  # noqa: BLE001
             job.state = JobState.failed.value
             job.error_message = str(e)[:2000]
