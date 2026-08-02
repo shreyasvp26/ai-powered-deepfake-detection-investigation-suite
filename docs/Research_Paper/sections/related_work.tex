@@ -1,0 +1,19 @@
+% ============================================================
+% SECTION II: RELATED WORK
+% ============================================================
+\section{Related Work}
+
+\textbf{Binary deepfake detection.}
+The FaceForensics++ benchmark~\cite{rossler2019faceforensics} put XceptionNet~\cite{chollet2017xception} on the map as a strong frame-level binary classifier. These detectors work well for telling real from fake, but they treat all manipulation methods the same, throwing away forensically useful method-specific information.
+
+\textbf{Frequency-domain forensics.}
+Frank et al.~\cite{frank2020leveraging} showed that GAN-generated images carry periodic spectral artifacts from transposed-convolution upsampling, visible as peaks in the 2D Fourier spectrum. Hao et al.~\cite{hao2021twostreamSRM} took this further by combining RGB features with Spatial Rich Model (SRM)~\cite{fridrich2012srm} noise residuals in a two-stream detection network. Our work builds on these frequency-domain ideas but extends them from binary detection into attribution, where the spectral differences between methods become the key discriminative signal.
+
+\textbf{Contrastive learning for forensics.}
+Khosla et al.~\cite{khosla2020supervised} introduced supervised contrastive learning (SupCon), which organizes embedding space by pulling same-class representations closer and pushing different-class ones apart. We adapt SupCon for forensic attribution, setting the temperature to $\tau = 0.15$ to account for our smaller effective batch size of 96.
+
+\textbf{Explainability.}
+Grad-CAM~\cite{selvaraju2017gradcam} and Grad-CAM++~\cite{chattopadhay2018gradcampp} generate spatial saliency maps by weighting feature activations according to gradient-derived importance. Previous work in this space produces a single spatial heatmap; we instead generate \textit{dual} heatmaps - one from each stream - which reveal complementary forensic evidence.
+
+\textbf{Augmentation for generalization.}
+Self-Blended Images (SBI)~\cite{shiohara2022sbi} create pseudo-fakes from real images by self-blending through a soft mask. Face X-ray~\cite{li2020facexray} showed that blending boundaries serve as a universal manipulation signal. We draw on both ideas: SBI augmentation broadens the training distribution, while a mask decoder learns to localize blending boundaries, improving cross-dataset robustness.

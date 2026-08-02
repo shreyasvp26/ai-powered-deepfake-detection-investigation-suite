@@ -1,0 +1,25 @@
+% ============================================================
+% SECTION VI: DISCUSSION + CONCLUSION
+% ============================================================
+\section{Discussion}
+
+\textbf{Two-token attention degeneracy.}
+The observation that self-attention over a length-2 sequence boils down to scalar interpolation is not specific to deepfake forensics. Any dual-branch architecture that fuses pooled embeddings via self-attention should watch for this failure mode. With $h = 8$ heads, attention yields 8 scalar weights; our gating yields 512 per-dimension weights. We suspect this insight applies to other dual-stream tasks as well - for example, audio-visual fusion - though validating that is left for future work.
+
+\textbf{Asymmetric compute placement.}
+Running SRM on CPU (inside DataLoader workers) and FFT on GPU is a practical design choice that tends to get overlooked in architecture papers. It avoids two bottlenecks: doing both in the forward pass starves the GPU of compute; pre-computing both to disk costs around 240\,GB for the full FF++ dataset.
+
+\textbf{Identity-safe evaluation.}
+The 2-5\% accuracy drop from identity-safe splits is an honesty measure, not a flaw. We would encourage the community to adopt source-ID-based partitioning as the default for attribution benchmarks.
+
+\subsection{Limitations}
+The pipeline tracks a single face per video. Training covers four FF++ methods; newer generators (diffusion-based) are not represented. FF++ is a controlled-lab dataset, and the cross-dataset generalization gap (an AUC drop of $\sim$0.22 on Celeb-DF~v2 and $\sim$0.24 on DFDC preview, reported in Section~\ref{sec:cross_dataset}) remains substantial despite SBI augmentation and the mask head. Heavy compression (c40) may degrade the SRM/FFT signals that the frequency stream relies on; resize-based perturbations are the worst case in our robustness probe ($-0.052$ AUC).
+
+\section{Conclusion}
+
+We presented DSAN, a dual-stream attribution network that goes beyond asking \textit{whether} facial media has been manipulated to identify \textit{how}. On FF++ c23 with identity-safe splits, the binary detection stage reaches 0.941 AUC and 91.2\% accuracy, and DSAN attribution reaches 90.0\% macro F1 with a 0.043 Expected Calibration Error and tightly-spread per-class scores (90.0--91.6 F1). The ablation study isolates supervised contrastive learning and the dual-stream design as the two single largest contributors. The gated bilinear fusion mechanism solves a concrete problem - the degeneracy of two-token self-attention - and the dual Grad-CAM++ explainability surfaces method-specific saliency in both spatial and frequency domains. Taken together, the modular forensic pipeline shows that deepfake investigation can be turned into a reproducible, auditable process.
+
+\textbf{Future work} includes extending the system to diffusion-based generators, running full-scale cross-dataset evaluations, testing robustness under c40 compression, and exploring cross-attention fusion as an alternative to gating.
+
+\section*{Acknowledgment}
+The author thanks Dr.\ Kaptan Singh for supervision and guidance. The FaceForensics++ dataset was used under academic license.

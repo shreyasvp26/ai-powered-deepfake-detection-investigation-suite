@@ -24,7 +24,8 @@ wandb>=0.16.0
 tensorboard>=2.14.0
 PyYAML>=6.0.1
 tqdm>=4.66.0
-pytorch-grad-cam>=1.4.8
+# Jacobgil's pytorch-grad-cam is published on PyPI as `grad-cam`.
+grad-cam==1.5.5
 xgboost>=2.0.0
 streamlit>=1.28.0
 fpdf2>=2.7.0

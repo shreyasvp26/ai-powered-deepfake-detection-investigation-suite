@@ -3,6 +3,7 @@
 **Version:** 10.0 (Final — All Audit Rounds Applied, Full Structure Restored)
 **Date:** April 2026
 **Team Lead:** Shreyas Patil
+**Supervisor** Dr. Kaptan Singh
 **Team:** Shreyas Patil, Om Deshmukh, Ruturaj Challawar, Vinayak Pandalwad, Suparna Joshi
 **Project Type:** BTech Major Project
 

@@ -1,0 +1,284 @@
+% ============================================================
+% SECTION III: PROPOSED METHODOLOGY
+% ============================================================
+\section{Proposed Methodology}
+
+\subsection{System Overview}
+
+Fig.~\ref{fig:pipeline} shows the full forensic pipeline. Given an input video, the system extracts and tracks faces, runs XceptionNet~\cite{chollet2017xception} to classify each frame as real or fake, computes a temporal consistency score, and fuses both signals through logistic regression. If the verdict is fake, DSAN kicks in to attribute the manipulation method and produces dual Grad-CAM++~\cite{chattopadhay2018gradcampp} heatmaps to explain its reasoning. Each component can be tested and swapped out independently.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.35cm,
+    every node/.style={font=\scriptsize},
+    block/.style={rectangle, draw, rounded corners=2pt, minimum width=2.4cm, minimum height=0.55cm, text centered, fill=#1},
+    arr/.style={-{Stealth[length=1.8mm]}, semithick},
+    lbl/.style={font=\tiny\itshape, text=blue!60!black}
+]
+\node[block=green!10] (in) {Input Video};
+\node[block=blue!8, below=of in] (pp) {Face Extraction + Tracking};
+\node[block=blue!8, below left=0.5cm and 0.1cm of pp, text width=1.6cm] (sp) {XceptionNet};
+\node[block=blue!8, below right=0.5cm and 0.1cm of pp, text width=1.6cm] (tp) {Temporal\\Analysis};
+\node[block=gray!10, below=1.15cm of pp] (fu) {LR Fusion};
+\node[block=red!8, below=of fu, font=\scriptsize\bfseries, minimum width=2.6cm] (ds) {DSAN Attribution};
+\node[block=yellow!10, below=of ds] (gc) {Dual Grad-CAM++};
+\node[block=green!10, below=of gc] (rp) {Forensic Report};
+
+\draw[arr] (in) -- (pp);
+\draw[arr] (pp) -| (sp);
+\draw[arr] (pp) -| (tp);
+\draw[arr] (sp) |- (fu) node[lbl, pos=0.25, left] {$S_s$};
+\draw[arr] (tp) |- (fu) node[lbl, pos=0.25, right] {$T_s$};
+\draw[arr] (fu) -- (ds) node[lbl, midway, right] {if fake};
+\draw[arr] (ds) -- (gc);
+\draw[arr] (gc) -- (rp);
+\end{tikzpicture}
+\caption{Forensic pipeline. Binary detection feeds a fusion layer; DSAN attribution and Grad-CAM++ run conditionally on fake-classified inputs.}
+\label{fig:pipeline}
+\end{figure}
+
+% -------------------------------------------------------
+\subsection{Binary Detection}
+
+\subsubsection{Spatial Detection}
+A pretrained XceptionNet~\cite{rossler2019faceforensics} generates per-frame fake probabilities. The spatial score is simply the average across $N$ frames: $S_s = \frac{1}{N}\sum_{i} p_i^{\text{fake}}$.
+
+\subsubsection{Temporal Consistency}
+Real videos produce stable frame-by-frame predictions; deepfakes tend to fluctuate. We capture this with four hand-crafted features - global variance, sign-flip rate, maximum sliding-window variance, and maximum consecutive jump - and combine them as $T_s = \sum_{k} w_k \min(\alpha_k f_k, 1)$. The weights $w = [0.30, 0.25, 0.25, 0.20]$ were tuned on the validation split through grid search. Hand-crafted features are a deliberate choice here: the temporal module works with only 10-30 scalar predictions, and its job is to act as a lightweight, fast gatekeeper so the heavier DSAN only runs when it needs to.
+
+\subsubsection{Detection Fusion}
+A \texttt{StandardScaler} + \texttt{LogisticRegression} pipeline combines $S_s$ and $T_s$ into $F \in [0,1]$, with fallback $F = S_s$ when fewer than two frames are available.
+
+% -------------------------------------------------------
+\subsection{DSAN: Dual-Stream Attribution Network}
+
+Once a face crop is flagged as fake, DSAN determines which of four methods produced it. The architecture (Fig.~\ref{fig:dsan_arch}) sends the input through two parallel streams and merges their outputs through a learned gate.
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm and 0.8cm,
+    every node/.style={font=\small},
+    sbox/.style={rectangle, draw, rounded corners=3pt, minimum height=0.7cm, text centered, fill=#1},
+    pbox/.style={rectangle, draw, rounded corners=2pt, minimum height=0.55cm, text centered, font=\scriptsize, fill=#1},
+    hbox/.style={rectangle, draw, rounded corners=3pt, minimum height=0.55cm, text centered, font=\scriptsize\bfseries, fill=#1},
+    arr/.style={-{Stealth[length=2mm]}, semithick},
+    darr/.style={-{Stealth[length=2mm]}, semithick, dashed, blue!50},
+    note/.style={font=\tiny, text=gray!60!black}
+]
+
+% ---- Input ----
+\node[pbox=green!10, minimum width=1.6cm] (inp) {Face Crop};
+
+% ---- RGB Stream (top) ----
+\node[sbox=blue!10, right=2cm of inp, yshift=1.3cm, minimum width=3cm] (enet) {EfficientNet-B4};
+\node[pbox=blue!6, right=1.2cm of enet, minimum width=2.4cm] (pool) {AvgPool $\to$ Proj};
+\node[note, above=0.15cm of enet] {\bfseries RGB Stream};
+
+% ---- Freq Stream (bottom) ----
+\node[pbox=orange!8, right=2cm of inp, yshift=-1.3cm, minimum width=1.4cm] (gray) {Grayscale};
+\node[pbox=orange!8, right=0.6cm of gray, minimum width=1.2cm] (srm) {SRM};
+\node[pbox=orange!8, right=0.4cm of srm, minimum width=1.2cm] (fft) {FFT};
+\node[sbox=orange!10, right=0.8cm of fft, minimum width=2.4cm] (rnet) {ResNet-18 (6-ch)};
+\node[note, below=0.15cm of rnet] {\bfseries Frequency Stream};
+
+% ---- Fusion ----
+\node[sbox=yellow!15, right=1.5cm of pool, yshift=-1.3cm, minimum width=3cm, font=\small\bfseries] (fuse) {Gated Bilinear Fusion};
+
+% ---- Heads ----
+\node[hbox=red!10, right=1.2cm of fuse, yshift=0.55cm, minimum width=2cm] (ce) {Classification};
+\node[hbox=red!10, right=1.2cm of fuse, yshift=0cm, minimum width=2cm] (sc) {SupCon};
+\node[hbox=purple!10, right=1.2cm of fuse, yshift=-0.55cm, minimum width=2cm] (mk) {Mask Decoder};
+
+% ---- Arrows: Input to streams ----
+\draw[arr] (inp.north east) -- (enet.west) node[note, pos=0.5, above] {RGB};
+\draw[arr] (inp.south east) -- (gray.west) node[note, pos=0.5, below] {};
+
+% ---- RGB flow ----
+\draw[arr] (enet) -- (pool);
+
+% ---- Freq flow ----
+\draw[arr] (gray) -- (srm) node[note, above, midway] {\tiny CPU};
+\draw[arr] (srm) -- (fft) node[note, above, midway] {\tiny GPU};
+\draw[arr] (fft) -- (rnet);
+
+% ---- Streams to fusion ----
+\draw[arr] (pool.east) -- ++(0.4, 0) |- (fuse.175) node[note, pos=0.25, right] {$\vect{h}_{rgb}$\,\tiny(512-d)};
+\draw[arr] (rnet.east) -- ++(0.4, 0) |- (fuse.185) node[note, pos=0.25, right] {$\vect{h}_{freq}$\,\tiny(512-d)};
+
+% ---- Fusion to heads ----
+\draw[arr] (fuse.east) -- ++(0.3, 0) |- (ce.west);
+\draw[arr] (fuse.east) -- (sc.west);
+\draw[arr] (fuse.east) -- ++(0.3, 0) |- (mk.west);
+
+
+
+\end{tikzpicture}
+\caption{DSAN architecture. Two parallel streams produce 512-d embeddings merged by gated fusion. The SRM and FFT outputs are concatenated into a 6-channel input before ResNet-18. The pre-pool spatial feature map from EfficientNet-B4 is also routed to the mask decoder (not shown for clarity). ``CPU'' and ``GPU'' labels indicate where each frequency operation runs.}
+\label{fig:dsan_arch}
+\end{figure*}
+
+% ---- RGB Stream ----
+\subsubsection{RGB Spatial Stream}
+We use EfficientNet-B4~\cite{tan2019efficientnet}, pretrained on ImageNet, as the RGB backbone. Setting \texttt{global\_pool=''} preserves the spatial feature maps $\vect{F}_{rgb} \in \R^{B \times 1792 \times 7 \times 7}$, which we need for both Grad-CAM and the mask decoder. A separate pooling and projection step then produces the stream embedding:
+\begin{equation}
+    \vect{h}_{rgb} = \text{GELU}\!\big(\text{LN}(\mat{W}_p\;\text{AvgPool}(\vect{F}_{rgb}) + \vect{b}_p)\big) \in \R^{B \times 512}
+    \label{eq:rgb}
+\end{equation}
+
+% ---- Freq Stream ----
+\subsubsection{Frequency-Domain Stream}
+\label{sec:freq_stream}
+
+This stream is designed to catch manipulation traces that are invisible at the pixel level. It builds a 6-channel input from two complementary sources (Fig.~\ref{fig:freq_detail}).
+
+\begin{figure}[!t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.35cm,
+    every node/.style={font=\scriptsize},
+    box/.style={rectangle, draw, rounded corners=2pt, minimum width=1.3cm, minimum height=0.5cm, text centered, fill=#1},
+    arr/.style={-{Stealth[length=1.5mm]}, semithick},
+    note/.style={font=\scriptsize\bfseries, text=gray!50!black}
+]
+% Input at top
+\node[box=green!10, minimum width=2cm] (g) {Grayscale $[0,255]$};
+
+% SRM branch (left column)
+\node[box=blue!8, below left=0.5cm and 0.6cm of g] (k1) {$K_1$ edge};
+\node[box=blue!8, below=of k1] (k2) {$K_2$ Laplacian};
+\node[box=blue!8, below=of k2] (k3) {$K_3$ texture};
+\node[note, above=0.06cm of k1] {SRM (CPU)};
+
+% FFT branch (right column)
+\node[box=orange!8, below right=0.5cm and 0.6cm of g] (mag) {Magnitude};
+\node[box=orange!8, below=of mag] (pha) {Phase};
+\node[box=orange!8, below=of pha] (pow) {Power};
+\node[note, above=0.06cm of mag] {FFT (GPU)};
+
+% Concat
+\node[box=gray!10, below=0.5cm of g, yshift=-2.6cm, minimum width=2cm] (cat) {Concat (6 channels)};
+
+% ResNet
+\node[box=blue!10, below=of cat, minimum width=2cm, font=\scriptsize\bfseries] (rn) {ResNet-18};
+
+% Arrows
+\draw[arr] (g.south) -- ++(0,-0.15) -| (k1.north);
+\draw[arr] (g.south) -- ++(0,-0.15) -| (mag.north);
+\draw[arr] (k1) -- (k2);
+\draw[arr] (k2) -- (k3);
+\draw[arr] (mag) -- (pha);
+\draw[arr] (pha) -- (pow);
+\draw[arr] (k3.south) |- ([yshift=2pt]cat.west);
+\draw[arr] (pow.south) |- ([yshift=-2pt]cat.east);
+\draw[arr] (cat) -- (rn);
+\end{tikzpicture}
+\caption{Frequency stream. Three fixed SRM kernels~\cite{fridrich2012srm} produce noise residuals on CPU; 2D FFT yields magnitude, phase, and power on GPU. All six channels are concatenated for ResNet-18.}
+\label{fig:freq_detail}
+\end{figure}
+
+\textbf{SRM noise residuals} are computed on CPU inside the DataLoader by convolving the grayscale image with three fixed $5\!\times\!5$ kernels from the SRM filter bank~\cite{fridrich2012srm} (full specifications in~\cite{fridrich2012srm}, Table~I). Each output is clamped to $[-10, 10]$ and scaled to $[-1, 1]$. The three kernels target horizontal edges ($K_1$), cross-pattern Laplacians ($K_2$), and high-order texture patterns ($K_3$). One important detail: the grayscale input must be in $[0, 255]$. Using $[0, 1]$ produces residuals that are $255\times$ too small, which effectively silences the noise stream.
+
+\textbf{FFT features} are computed on GPU during the forward pass. We take a 2D FFT of the normalized grayscale and extract three channels: log-magnitude $M$, normalized phase $\Phi$, and log-power $P$, each min-max normalized to $[0, 1]$ per batch. This normalization step matters: without it, the raw FFT magnitudes dominate the gradients in the first convolution layer and suppress the SRM contributions.
+
+\textbf{6-channel backbone.} The six channels $[R_1, R_2, R_3, M, \Phi, P]$ are concatenated and fed into ResNet-18~\cite{he2016resnet}, modified to accept 6-channel input. We initialize the first layer by duplicating the pretrained 3-channel weights to both halves, which preserves the learned low-level filters. The output is $\vect{h}_{freq} \in \R^{B \times 512}$.
+
+% ---- Gated Fusion ----
+\subsubsection{Gated Bilinear Fusion}
+\label{sec:gated_fusion}
+
+The obvious way to combine two stream embeddings is multi-head attention. But with only two tokens, the $2\!\times\!2$ attention weight matrix has just one degree of freedom per head: each row sums to 1, parameterized by a single logit difference. This reduces the output to $\alpha\,\vect{V}_{rgb} + (1{-}\alpha)\,\vect{V}_{freq}$ for a scalar $\alpha$. The network has no way to selectively trust different dimensions from different streams. What happens in practice is that EfficientNet, being ImageNet-pretrained, produces larger gradients than the 6-channel ResNet, so the optimizer pushes $\alpha$ toward 1 and the frequency stream gets ignored.
+
+We should note that \textit{cross-attention} (using one stream as query and the other as key/value) would avoid this particular degeneracy - but it requires working with spatial feature maps instead of pooled embeddings, which fundamentally changes the architecture and drives up compute. Our gated fusion gets per-dimension selectivity on pooled embeddings at a fraction of the cost.
+
+The gate is computed from the concatenation of both streams (Fig.~\ref{fig:gate}):
+\begin{align}
+    \vect{g} &= \sigma\!\big(\mat{W}_g [\vect{h}_{rgb} \| \vect{h}_{freq}] + \vect{b}_g\big) \in \R^{B \times d} \label{eq:gate}\\
+    \vect{h}_{fused} &= \text{LN}\!\big(\vect{g} \odot \vect{h}_{rgb} + (1{-}\vect{g}) \odot \vect{h}_{freq}\big) + \text{MLP}(\cdot) \label{eq:fused}
+\end{align}
+where $\mat{W}_g \in \R^{d \times 2d}$ and $\sigma$ is the element-wise sigmoid. This gives the network 512 independent decisions - ``for dimension $j$, should I trust the RGB stream or the frequency stream?'' - each conditioned on the joint context of both streams. For comparison, self-attention with $h = 8$ heads provides just 8 scalar weights; gating provides 512, a $64\times$ increase in selectivity. An MLP (two layers, GELU, 10\% dropout) with a residual connection rounds out the fusion block.
+
+\begin{figure}[!b]
+\centering
+\begin{tikzpicture}[
+    every node/.style={font=\scriptsize},
+    box/.style={rectangle, draw, rounded corners=2pt, minimum height=0.5cm, text centered, fill=#1},
+    op/.style={circle, draw, fill=gray!10, inner sep=2pt, font=\scriptsize\bfseries},
+    arr/.style={-{Stealth[length=1.5mm]}, semithick},
+    note/.style={font=\tiny, text=gray!60!black}
+]
+
+% Inputs
+\node[box=blue!10, minimum width=2.6cm] (hr) {$\vect{h}_{rgb} \in \R^{512}$};
+\node[box=orange!10, minimum width=2.6cm, below=0.6cm of hr] (hf) {$\vect{h}_{freq} \in \R^{512}$};
+
+% Concat + gate
+\node[box=gray!8, right=1.8cm of hr, yshift=-0.45cm, minimum width=2.4cm] (concat) {Concat $\to$ $\mat{W}_g$ $\to$ $\sigma$};
+\node[note, above=0.08cm of concat] {Gate computation};
+
+% Gate output
+\node[box=yellow!12, below=0.7cm of concat, minimum width=2.4cm] (gvec) {$\vect{g} \in [0,1]^{512}$};
+
+% Element-wise multiply
+\node[op, below left=0.7cm and 0.3cm of gvec] (m1) {$\odot$};
+\node[op, below right=0.7cm and 0.3cm of gvec] (m2) {$\odot$};
+
+% Sum
+\node[op, below=0.6cm of gvec, yshift=-0.5cm] (plus) {$+$};
+
+% Output
+\node[box=green!10, below=0.45cm of plus, minimum width=2.6cm] (out) {$\vect{h}_{fused} \in \R^{512}$};
+
+% Arrows
+\draw[arr] (hr.east) -| (concat.north);
+\draw[arr] (hf.east) -| (concat.south);
+\draw[arr] (concat) -- (gvec);
+
+% Gate to multipliers
+\draw[arr] (gvec.south) -- ++(0,-0.2) -| (m1.north) node[note, pos=0.3, left] {$\vect{g}$};
+\draw[arr] (gvec.south) -- ++(0,-0.2) -| (m2.north) node[note, pos=0.3, right] {$1{-}\vect{g}$};
+
+% Stream inputs to multipliers
+\draw[arr, blue!60] (hr.south) -- ++(0,-1.65) -| (m1.west);
+\draw[arr, orange!60] (hf.south) -- ++(0,-0.95) -| (m2.east);
+
+% Multipliers to sum
+\draw[arr] (m1.south) |- (plus.west);
+\draw[arr] (m2.south) |- (plus.east);
+\draw[arr] (plus) -- (out);
+\end{tikzpicture}
+\caption{Gated bilinear fusion. The gate $\vect{g}$ provides 512 per-dimension weights conditioned on both streams, enabling the network to, e.g., trust the frequency stream for NeuralTextures artifacts while relying on the RGB stream for FaceSwap blending boundaries.}
+\label{fig:gate}
+\end{figure}
+
+% ---- Multi-task Loss ----
+\subsection{Multi-Task Training}
+
+DSAN is trained with three losses that serve complementary purposes.
+
+\textbf{Cross-entropy} over four attribution classes: $\lce = -\sum_{c=1}^{4} y_c \log \hat{y}_c$, where $\hat{y} = \text{softmax}(\mat{W}_c \vect{h}_{fused} + \vect{b}_c)$.
+
+\textbf{Supervised contrastive loss}~\cite{khosla2020supervised} structures the embedding space:
+\begin{equation}
+    \supcon = -\frac{1}{|P(i)|} \sum_{p \in P(i)} \log \frac{\exp(\vect{z}_i \!\cdot\! \vect{z}_p / \tau)}{\sum_{a \neq i} \exp(\vect{z}_i \!\cdot\! \vect{z}_a / \tau)}
+    \label{eq:supcon}
+\end{equation}
+where $\vect{z}_i = \vect{h}_{fused}/\|\vect{h}_{fused}\|_2$, $P(i)$ collects same-method pairs, and $\tau = 0.15$. We set the temperature higher than the standard 0.07 because our effective batch size (96) is much smaller than the 4096 used in~\cite{khosla2020supervised}: with fewer negatives, a smoother contrastive landscape helps prevent premature saturation. A \texttt{StratifiedBatchSampler} ensures at least 2 samples per class in every batch.
+
+\textbf{Blending-mask BCE,} inspired by Face X-ray~\cite{li2020facexray}: a lightweight decoder takes the RGB spatial feature map and predicts a $64\!\times\!64$ mask, supervised by $\lmask = \text{BCE}_w(\hat{M}, M_{gt})$ with positive-class weight 2.0.
+
+\textbf{Total objective:}
+\begin{equation}
+    \mathcal{L} = \lce + 0.2\;\supcon + 0.3\;\lmask
+    \label{eq:total}
+\end{equation}
+Samples augmented with SBI are excluded from $\lce$ and $\supcon$ through per-sample masking, since they carry no real method label.
+
+% ---- SBI ----
+\subsection{Self-Blended Images}
+Following~\cite{shiohara2022sbi}, we create pseudo-fakes from real crops at a rate of 20\% of each batch by self-blending through a soft elliptical mask. This produces training samples that are not tied to any particular generator, along with ground-truth masks for the decoder. The goal is to improve cross-dataset robustness.
+
+% ---- Explainability ----
+\subsection{Dual Grad-CAM++ Explainability}
+We produce two Grad-CAM++~\cite{chattopadhay2018gradcampp} heatmaps for each frame. The \textbf{spatial heatmap} targets the last non-$1\!\times\!1$ convolution in EfficientNet, which we locate dynamically by walking the module tree. The \textbf{frequency heatmap} targets the last convolution in ResNet's \texttt{layer4}, found by structural index. It is worth noting that the frequency stream processes a 6-channel \textit{spatial} input (the SRM residuals preserve spatial correspondence, and the FFT channels are broadcast across all positions), so the Grad-CAM maps end up highlighting which \textit{spatial locations} in the combined representation carry the most forensic information - which in practice means the locations where SRM residuals show the strongest manipulation traces.

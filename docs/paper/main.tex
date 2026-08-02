@@ -1,0 +1,354 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{multirow}
+
+% Algorithms (Overleaf supports these packages by default)
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+\newcommand{\MaybeIncludeGraphics}[2][]{%
+  \IfFileExists{#2}{%
+    \includegraphics[#1]{#2}%
+  }{%
+    \fbox{\parbox{\linewidth}{\centering Missing figure file:\\ \texttt{#2}}}%
+  }%
+}
+
+\begin{document}
+
+\title{Dual Stream Attribution Network for Deepfake Type Identification with Frequency Guided Explainability}
+
+\author{
+\IEEEauthorblockN{1st Given Name Surname}
+\IEEEauthorblockA{dept. name of organization (of Aff.)\\
+name of organization (of Aff.)\\
+City, Country\\
+email address}
+\and
+\IEEEauthorblockN{2nd Given Name Surname}
+\IEEEauthorblockA{dept. name of organization (of Aff.)\\
+name of organization (of Aff.)\\
+City, Country\\
+email address}
+}
+
+\maketitle
+
+\begin{abstract}
+Most deepfake detectors stop at a binary real-versus-fake decision, which is insufficient for forensic investigation workflows where practitioners must also answer what manipulation family produced a forged clip and why the model believes so. We present an attribution-first deepfake forensics pipeline whose central component is the Dual Stream Attribution Network version three point one, a dual-stream model that couples RGB spatial evidence with frequency and noise cues and provides interpretable explanations. The method incorporates a blending mask auxiliary head and generator-free self-blended image augmentation to improve generalization, and uses calibration to reduce overconfidence. The system gates attribution behind a fusion based fake decision to avoid erroneous attribution on real videos, and provides dual explanation maps aligned to spatial and frequency evidence. The design is evaluated under identity-safe protocols and emphasizes reproducibility through fixed seeds and deterministic aggregation.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Deepfake attribution, video forensics, frequency analysis, SRM, supervised contrastive learning, Grad-CAM, calibration
+\end{IEEEkeywords}
+
+\section{Introduction}
+Binary deepfake detection is now widely studied, but investigation-oriented use cases require a second question: if a clip is fake, what manipulation family is responsible. This paper places deepfake-type attribution at the center. We introduce a system that first produces robust detection scores and then, conditional on a fake decision, attributes the manipulation type among the FaceForensics++ families. Our key idea is a dual-stream attribution model that fuses spatial RGB cues with frequency and noise fingerprints and produces interpretable evidence.
+
+Our contributions are:
+\begin{itemize}[leftmargin=*]
+  \item A dual-stream attribution model (DSAN v3.1) that combines RGB features with SRM residuals and FFT-derived frequency features via gated fusion, and predicts a four-class manipulation label.
+  \item A multi-task generalization strategy that adds an auxiliary blending-mask head (Face X-ray style) and self-blended image augmentation, with per-sample masking so pseudo-fakes contribute only to the mask objective.
+  \item Dual explanation maps that provide spatial and frequency evidence for attribution using Grad-CAM++ style localization, computed on the most confident frames.
+  \item An end-to-end pipeline that gates attribution behind a fused fake decision and outputs a reproducible report suitable for forensic analysis.
+\end{itemize}
+
+\section{Related Work}
+FaceForensics++ \cite{Rossler2019FFPP} defines the standard benchmark and manipulation families targeted in this work. Frequency-domain artifacts are a recurring signal for deepfake detection \cite{Frank2020Frequency}, and two-stream designs that combine RGB with residual cues motivate our dual-stream approach \cite{Hao2021LearnableSRM}. Attribution-oriented models are less explored than binary detection; recent work emphasizes the value of identifying manipulation families for forensics \cite{FAME2025}. Manipulation-agnostic supervision via blending boundaries (Face X-ray) improves cross-dataset robustness \cite{Li2020FaceXray}, and generator-free self-blended images produce strong generalization \cite{Shiohara2022SBI}. We adopt supervised contrastive learning \cite{Khosla2020SupCon} to improve class separability. For interpretability, Grad-CAM \cite{Selvaraju2017GradCAM} provides a standard gradient-based localization mechanism that we apply to both spatial and frequency pathways.
+
+\section{System Overview and Problem Formulation}
+\subsection{Pipeline overview}
+Given a video, the system samples face crops, produces a per-video detection verdict, and when predicted fake, outputs an attribution label and explanations. The pipeline consists of preprocessing, a spatial detector producing per-frame fake probabilities, a temporal consistency module producing a temporal score, a fusion layer producing a final fake probability, and a conditional attribution stage.
+
+\subsection{Deployment context (optional)}
+While the main novelty is the DSAN v3.1 attribution method, the system is designed to fit a practical investigation workflow. In the target web-enabled deployment, a job-based inference service validates uploads, enqueues work, and executes the same deterministic engine pipeline in a worker process, returning a report JSON/PDF for downstream audit and visualization.
+
+\begin{figure}[t]
+  \centering
+  \MaybeIncludeGraphics[width=\linewidth]{figures/fig4_v2_arch_placeholder.pdf}
+  \caption{Optional deployment context: job-based inference service (API, queue, worker, storage) that runs the same engine pipeline and returns reports.}
+  \label{fig:v2}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \MaybeIncludeGraphics[width=\linewidth]{figures/fig1_pipeline_placeholder.pdf}
+  \caption{End-to-end pipeline. Attribution is executed only when the fused detection score indicates a fake video.}
+  \label{fig:pipeline}
+\end{figure}
+
+\subsection{Notation}
+Table~\ref{tab:notation} summarizes the main symbols used in the paper.
+
+\begin{table}[t]
+\caption{Notation (selected)}
+\label{tab:notation}
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+Symbol & Meaning \\ \midrule
+$x_i$ & $i$-th sampled face crop from a video \\
+$p_i$ & per-frame fake probability from spatial detector \\
+$S_s$ & spatial score (mean of $\{p_i\}$) \\
+$T_s$ & temporal score from temporal consistency features \\
+$F$ & fused fake probability (LR on $[S_s,T_s]$; fallback $F=S_s$) \\
+$y$ & attribution class in $\{0,1,2,3\}$ (DF/F2F/FS/NT) \\
+$r$ & SRM residual tensor (3 channels) \\
+$m,\phi,p$ & FFT magnitude, phase, and power channels \\
+$u,v$ & RGB and frequency embeddings (dimension $d$) \\
+$h$ & fused embedding after gated fusion \\
+$\ell$ & 4-class attribution logits \\
+$q$ & blending-mask logits (auxiliary head) \\
+$\tau$ & SupCon temperature \\
+$T$ & calibration temperature (temperature scaling) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Attribution task}
+Let a video provide $N$ sampled face crops $\{x_i\}_{i=1}^{N}$. Detection outputs a fused fake probability $F \in [0,1]$. When $F$ exceeds a threshold (set on validation), the attribution model predicts a manipulation family label $y \in \{0,1,2,3\}$ corresponding to Deepfakes, Face2Face, FaceSwap, and NeuralTextures, and returns a calibrated probability distribution over these classes.
+
+\section{Detection Context Modules}
+\subsection{Spatial aggregation}
+Let $p_i = P(\mathrm{fake}\mid x_i)$ be the per-frame fake probability from a spatial detector. The spatial score is the mean:
+\begin{equation}
+S_s = \frac{1}{N}\sum_{i=1}^{N} p_i.
+\end{equation}
+
+\subsection{Temporal consistency score}
+Temporal consistency uses statistics of $\{p_i\}$ to quantify instability. Let $\mathrm{Var}(p)$ be the global variance, and define the sign flip rate across threshold $0.5$:
+\begin{equation}
+\mathrm{SFR} = \frac{1}{N-1}\sum_{i=2}^{N} \mathbb{I}\Big(\mathbb{I}(p_i>0.5)\neq \mathbb{I}(p_{i-1}>0.5)\Big).
+\end{equation}
+Let $\Delta_i = |p_i - p_{i-1}|$ for $i\ge 2$ and $\Delta_{\max} = \max_i \Delta_i$. Let $\mathrm{WVar}_{\max}$ be the maximum sliding-window variance over a window of length $w$ (default $w=30$). The temporal score $T_s$ is a clipped weighted sum:
+\begin{equation}
+T_s = \mathrm{clip}\Big(
+w_1 \cdot \min(10\,\mathrm{Var}(p),1)
+w_2 \cdot \min(\mathrm{SFR},1)
+w_3 \cdot \min(10\,\mathrm{WVar}_{\max},1)
+w_4 \cdot \min(\Delta_{\max},1),\ 0,\ 1
+\Big),
+\end{equation}
+where $(w_1,w_2,w_3,w_4)$ sum to one.
+
+\subsection{Fusion and attribution gating}
+Fusion uses a standardized feature vector $[S_s, T_s]$ and a logistic regression model to produce $F$. If fewer than two frames are available, temporal statistics are undefined; in this case the system uses the deterministic fallback $F=S_s$ (rather than feeding dummy values into the fusion model). Attribution is evaluated only when $F$ indicates fake.
+
+\begin{algorithm}[t]
+\caption{End-to-end inference with fusion-gated attribution}
+\label{alg:pipeline}
+\begin{algorithmic}[1]
+\REQUIRE Video $V$, frame budget $N$, Grad-CAM flag, top-$k$ frames
+\STATE Extract face crops $\{x_i\}_{i=1}^{N}$ from $V$
+\FOR{$i=1$ to $N$}
+  \STATE $p_i \leftarrow P(\mathrm{fake}\mid x_i)$
+\ENDFOR
+\STATE $S_s \leftarrow \frac{1}{N}\sum_i p_i$
+\STATE Compute $T_s$ from $\{p_i\}$ if $N\ge 2$
+\IF{$N<2$}
+  \STATE $F \leftarrow S_s$
+\ELSE
+  \STATE $F \leftarrow \mathrm{LR}(\mathrm{Standardize}([S_s,T_s]))$
+\ENDIF
+\IF{$F$ indicates \textbf{FAKE}}
+  \FOR{$i=1$ to $N$}
+    \STATE $(\ell_i, e_i, q_i) \leftarrow \mathrm{DSANv31}(x_i)$
+    \STATE $s_i \leftarrow \mathrm{softmax}(\ell_i)$
+  \ENDFOR
+  \STATE $\bar{s} \leftarrow \frac{1}{N}\sum_i s_i$
+  \STATE $\hat{y} \leftarrow \arg\max \bar{s}$
+  \IF{Grad-CAM enabled}
+    \STATE Select top-$k$ frames by $\max(s_i)$ and compute dual explanation maps
+  \ENDIF
+\ELSE
+  \STATE Skip attribution; output detection-only report
+\ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+\section{Dual Stream Attribution Network (DSAN v3.1)}
+\subsection{Inputs and streams}
+DSAN v3.1 takes an RGB crop $x \in \mathbb{R}^{3\times H\times W}$ and a forensic residual tensor $r \in \mathbb{R}^{3\times H\times W}$. The model is a dual-stream architecture: an RGB spatial stream and a frequency/noise stream. In the v3.1 configuration used in this project, the RGB backbone is EfficientNetV2-M and the frequency backbone is ResNet-50 (ImageNet initialization), with a shared fused embedding dimension $d$.
+
+Implementation detail: to maximize throughput, SRM residuals are computed in DataLoader workers (CPU-parallel) after undoing ImageNet normalization and scaling grayscale to $[0,255]$, while FFT features are computed on GPU during the forward pass. This division avoids CPU/GPU starvation while preserving per-sample determinism under fixed seeds.
+
+\begin{figure}[t]
+  \centering
+  \MaybeIncludeGraphics[width=\linewidth]{figures/fig2_dsan_arch_placeholder.pdf}
+  \caption{DSAN v3.1 overview. RGB stream (EfficientNetV2-M) and frequency/noise stream (ResNet-50 over SRM+FFT channels) are fused via gated fusion. An auxiliary mask decoder predicts a blending mask, and the fused embedding supports both classification and supervised contrastive learning.}
+  \label{fig:dsan}
+\end{figure}
+
+\subsection{SRM residual construction}
+Let $g \in \mathbb{R}^{1\times H\times W}$ be grayscale in $[0,255]$. Using three fixed $5\times5$ SRM kernels $\{K_c\}_{c=1}^{3}$, residual maps are computed as:
+\begin{equation}
+r_c = \mathrm{clip}(K_c * g,\ -10,\ 10)/10,\quad c\in\{1,2,3\}.
+\end{equation}
+
+\subsection{FFT feature channels}
+Let $\mathcal{F}(g)$ denote the 2D FFT of $g/255$ and $\mathcal{S}$ the frequency shift. Define $\hat{G}=\mathcal{S}(\mathcal{F}(g/255))$. The frequency channels are:
+\begin{align}
+m &= \log(1+|\hat{G}|),\\
+\phi &= \frac{\angle \hat{G} + \pi}{2\pi},\\
+p &= \log(1+|\hat{G}|^2).
+\end{align}
+To align dynamic ranges with SRM residuals, $m$ and $p$ are min-max normalized per sample to $[0,1]$ before concatenation. The frequency stream input is the $6$-channel tensor $[r;\,m;\,\phi;\,p]$.
+
+\subsection{Gated fusion}
+Let $u \in \mathbb{R}^{d}$ be the projected RGB embedding and $v \in \mathbb{R}^{d}$ the frequency embedding. Gated fusion computes:
+\begin{align}
+z &= \sigma(W_g [u;v] + b_g),\\
+h &= z \odot u + (1-z)\odot v,
+\end{align}
+where $[u;v]$ is concatenation, $\sigma$ is the sigmoid, and $\odot$ is elementwise multiplication. The fused embedding $h$ is used for classification and contrastive learning.
+
+\subsection{Heads}
+The classifier head outputs logits $\ell \in \mathbb{R}^{4}$. DSAN v3.1 also outputs an embedding for contrastive learning. Additionally, an auxiliary mask decoder predicts a blending mask logit map $q \in \mathbb{R}^{1\times M\times M}$ (default $M=64$) from pre-pooling RGB spatial features to provide manipulation-agnostic supervision.
+
+\subsection{Video-level aggregation}
+For a video with frame-level logits $\{\ell_i\}_{i=1}^{N}$, we compute per-frame probabilities $s_i=\mathrm{softmax}(\ell_i)$ and aggregate by mean:
+\begin{equation}
+\bar{s} = \frac{1}{N}\sum_{i=1}^{N} s_i.
+\end{equation}
+The predicted manipulation family is $\arg\max \bar{s}$ with confidence $\max \bar{s}$.
+
+\section{Optimization Objectives and Training Recipe}
+\subsection{Multi-task loss with masked SBI samples}
+For a labeled FF++ fake sample with class $y$, the classification loss is cross entropy:
+\begin{equation}
+\mathcal{L}_{CE} = -\log \frac{\exp(\ell_y)}{\sum_{k=1}^{4}\exp(\ell_k)}.
+\end{equation}
+Supervised contrastive loss is applied on embeddings using temperature $\tau$ \cite{Khosla2020SupCon}. Let $e_i$ be the normalized embedding, and let $P(i)$ be indices sharing the class label of sample $i$. Then:
+\begin{equation}
+\mathcal{L}_{SC} = \frac{1}{|I|}\sum_{i\in I} \left(
+ -\frac{1}{|P(i)|}\sum_{p\in P(i)}
+\log \frac{\exp(e_i^\top e_p/\tau)}{\sum_{a\neq i}\exp(e_i^\top e_a/\tau)}
+\right).
+\end{equation}
+The auxiliary mask objective uses binary cross entropy with logits. Let $q$ be mask logits and $m$ the ground-truth mask:
+\begin{equation}
+\mathcal{L}_{mask} = \mathrm{BCEWithLogits}(q,m).
+\end{equation}
+The total objective is:
+\begin{equation}
+\mathcal{L} = \alpha \mathcal{L}_{CE} + \beta \mathcal{L}_{SC} + \lambda \mathcal{L}_{mask}.
+\end{equation}
+Self-blended image (SBI) samples \cite{Shiohara2022SBI} are pseudo-fakes synthesized from real crops and contribute only to $\mathcal{L}_{mask}$ via per-sample masking (classification mask equals zero, mask mask equals one). Mixup \cite{Zhang2018Mixup} is applied to the classification head only, excluding SBI samples.
+
+In our default v3.1 training configuration, $\alpha=1.0$, $\beta=0.2$, $\lambda=0.3$, and $\tau=0.15$. The mask loss is implemented as a binary cross-entropy with logits with a positive-class reweighting factor (pos weight) of $2.0$ to balance sparse mask regions.
+
+\begin{algorithm}[t]
+\caption{DSAN v3.1 training step (multi-task, SBI-aware)}
+\label{alg:dsantrain}
+\begin{algorithmic}[1]
+\REQUIRE Batch $(x, r, m, y, \mathrm{clsMask}, \mathrm{maskMask})$
+\STATE Forward: $(\ell, e, q) \leftarrow \mathrm{DSANv31}(x, r)$
+\STATE $\mathcal{L}_{CE} \leftarrow \mathrm{MaskedMean}(\mathrm{CE}(\ell,y), \mathrm{clsMask})$
+\STATE $\mathcal{L}_{SC} \leftarrow \mathrm{SupCon}(e[\mathrm{clsMask}>0], y[\mathrm{clsMask}>0])$
+\STATE $\mathcal{L}_{mask} \leftarrow \mathrm{MaskedMean}(\mathrm{BCEWithLogits}(q,m), \mathrm{maskMask})$
+\STATE $\mathcal{L} \leftarrow \alpha\mathcal{L}_{CE} + \beta\mathcal{L}_{SC} + \lambda\mathcal{L}_{mask}$
+\STATE Backpropagate and update optimizer (AMP/accumulation as configured)
+\STATE Update EMA shadow weights; update SWA weights in late epochs (if enabled)
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Stabilization and calibration}
+We use EMA and SWA to improve generalization \cite{Izmailov2018SWA}. At evaluation, optional horizontal-flip test-time augmentation averages logits. For calibration, we fit a single temperature $T>0$ on held-out logits by minimizing negative log-likelihood \cite{Guo2017Calibration}. Calibrated probabilities are $\mathrm{softmax}(\ell/T)$. Expected calibration error (ECE) with $B$ bins is:
+\begin{equation}
+\mathrm{ECE} = \sum_{b=1}^{B} \frac{|S_b|}{n}\left|\mathrm{acc}(S_b) - \mathrm{conf}(S_b)\right|,
+\end{equation}
+where $S_b$ is the set of samples whose confidence falls in bin $b$, $n$ is the sample count, $\mathrm{acc}(\cdot)$ is empirical accuracy, and $\mathrm{conf}(\cdot)$ is mean confidence.
+
+\begin{algorithm}[t]
+\caption{Temperature scaling calibration (held-out split)}
+\label{alg:tscale}
+\begin{algorithmic}[1]
+\REQUIRE Held-out logits $\{\ell_i\}$ and labels $\{y_i\}$
+\STATE Initialize temperature $T\leftarrow 1$
+\STATE Optimize $T$ with L-BFGS to minimize $\sum_i \mathrm{CE}(\ell_i/T, y_i)$
+\STATE Report ECE before and after scaling (15 bins)
+\end{algorithmic}
+\end{algorithm}
+
+\section{Explainability via Dual Grad-CAM++}
+To provide forensic evidence, we compute two explanation maps per selected frame: a spatial map from the RGB stream and a frequency map from the frequency stream. Each map is computed using a Grad-CAM++ style procedure \cite{Selvaraju2017GradCAM} by targeting the last spatial convolution in the RGB backbone and the last block convolution in the frequency backbone. For efficiency, explanation maps are generated only for the top-$k$ most confident frames under $\max s_i$.
+
+\begin{figure}[t]
+  \centering
+  \MaybeIncludeGraphics[width=\linewidth]{figures/fig3_dual_cam_placeholder.pdf}
+  \caption{Dual explanation maps for attribution: spatial evidence (RGB stream) and frequency evidence (SRM+FFT stream).}
+  \label{fig:dualcam}
+\end{figure}
+
+\section{Experiments}
+\subsection{Protocol and splits}
+We follow identity-safe splits to prevent subject leakage between train, validation, and test. For detection, the fusion score $F$ is evaluated using AUC, and a single operating threshold is selected on validation using Youden-J ($\arg\max(\mathrm{TPR}-\mathrm{FPR})$) and applied unchanged to test. For attribution, evaluation is performed on fake samples only using macro F1 and per-class recall; SBI samples are excluded from attribution metrics by construction (classification mask equals zero). Calibration is reported using ECE with $15$ bins before and after temperature scaling. Cross-dataset evaluation reports AUC and the absolute drop relative to FaceForensics++ on Celeb-DF v2 \cite{CelebDF2020} and DFDC preview \cite{DFDC2020}. For the auxiliary mask head, we report validation IoU as a diagnostic sanity check to prevent silent degeneration of the mask objective.
+
+\subsection{Metrics and targets}
+We report (i) detection AUC using the fused score $F$, (ii) attribution macro F1 and per-class recall on fake-only samples, (iii) ECE after temperature scaling, (iv) cross-dataset AUC on Celeb-DF v2 and DFDC preview, and (v) mask-head IoU on validation as a diagnostic. The project target thresholds (used as acceptance criteria for the engineering milestone) are summarized in Table~\ref{tab:targets}.
+
+\begin{table}[t]
+\caption{Primary evaluation targets (project acceptance criteria)}
+\label{tab:targets}
+\centering
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Metric & Target & Notes \\ \midrule
+Attribution macro F1 (FF++ c23) & $\ge 0.90$ & fake-only, identity-safe \\
+Attribution macro F1 (FF++ c40) & $\ge 0.83$ & compressed evaluation \\
+Per-class recall (DF/F2F/FS/NT) & $\ge 0.88$ each & fake-only \\
+ECE after temperature scaling & $\le 0.05$ & 15 bins \\
+Cross-dataset AUC (Celeb-DF v2) & $\ge 0.78$ & zero-shot from FF++ \\
+Mask-head IoU (validation) & $\ge 0.35$ & diagnostic only \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Ablations}
+We ablate the contribution of SRM, FFT, gated fusion, supervised contrastive learning, mixup, and the mask head. We also report the effect of temperature scaling on ECE. Qualitative panels compare spatial and frequency explanation maps across manipulation families.
+
+\begin{table}[t]
+\caption{DSAN v3.1 ablations (protocol aligned to project testing spec)}
+\label{tab:ablations}
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Configuration & Macro F1 (c23) & ECE after $T$ & Notes \\ \midrule
+Full DSAN v3.1 & TBD & TBD & Reference checkpoint \\
+no-SRM & TBD & TBD & drop SRM channels from frequency stream \\
+no-FFT & TBD & TBD & drop FFT channels from frequency stream \\
+no-gated & TBD & TBD & replace gated fusion with mean/concat fusion \\
+no-SupCon & TBD & TBD & CE + mask only \\
+no-Mixup & TBD & TBD & mixup $\alpha=0$ \\
+rgb-only & TBD & TBD & remove frequency stream \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Discussion, Limitations, and Ethics}
+Attribution accuracy depends on face visibility and crop quality; extreme compression, occlusions, and non-frontal poses reduce performance. The pipeline deliberately avoids training on user uploads; it performs inference-only analysis and can enforce retention limits in deployment. Some signals (e.g., blink-based detection) were evaluated and dropped due to instability under FF++ compression and low frame-rate sampling; this is treated as an empirical finding rather than a failure.
+
+\section{Conclusion}
+We presented an attribution-first deepfake forensics system centered on DSAN v3.1, which fuses RGB and frequency/noise evidence through gated fusion, improves generalization via mask-based supervision and SBI augmentation, and provides dual explanation maps for investigative interpretability. The system gates attribution behind a fused fake decision and emphasizes reproducible evaluation under identity-safe protocols.
+
+\section*{Acknowledgment}
+Identify applicable funding agency here. If none, delete this text.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
+

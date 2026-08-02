@@ -116,7 +116,10 @@ def load_labeled_videos(
                 cands.append(crop_dir / method / comp / stem)
             for p in cands:
                 if p.is_dir() and list(p.glob("frame_*.png")):
-                    video_ids.append(f"{method}/{stem}")
+                    # IMPORTANT: DSANv31Dataset expects plain stems and resolves
+                    # <method>/<comp>/<stem> internally. Passing "method/stem"
+                    # breaks the lookup when crops live under compression folders.
+                    video_ids.append(stem)
                     labels.append(mi)
                     break
     return video_ids, labels

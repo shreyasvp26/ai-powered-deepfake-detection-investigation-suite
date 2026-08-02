@@ -1,0 +1,22 @@
+% ============================================================
+% SECTION I: INTRODUCTION
+% ============================================================
+\section{Introduction}
+
+Deepfake tools have gotten good enough that swapping faces, re-enacting expressions, and generating talking-head videos no longer requires much expertise. The forensic community has kept pace with a wave of binary detectors - systems that flag whether a given face is real or fake - and several now exceed 95\% accuracy on standard benchmarks~\cite{rossler2019faceforensics}.
+
+But binary detection only tells half the story. When a forensic analyst encounters a suspected deepfake, the obvious next question is: \textit{how was it made?} Was the face replaced entirely, was the expression transferred from another person, or did a neural renderer subtly alter the textures? Each method leaves its own artifact signature, carries different legal implications, and calls for different countermeasures. Identifying the specific manipulation method - what we call \textbf{deepfake attribution} - remains much less explored than detection itself.
+
+We present the \textbf{Dual-Stream Attribution Network (DSAN)}, built from the ground up for attribution. The core idea is straightforward: different manipulation pipelines corrupt different parts of the image signal. Face-swap methods produce spatial blending artifacts; reenactment methods disturb textures around the mouth and eyes; neural renderers leave spectral fingerprints tied to their upsampling operations~\cite{frank2020leveraging}. No single feature domain catches all of these, so DSAN processes each face crop through two parallel streams - one operating on RGB pixels, the other on frequency-domain features - and fuses them with a \textit{gated bilinear mechanism}.
+
+Why gated fusion instead of the more natural choice of multi-head attention? Because with only two input tokens, attention degenerates into a single scalar interpolation weight. It loses per-dimension selectivity, and the weaker stream gets suppressed. Our gating mechanism gives the network $d = 512$ independent per-dimension decisions, sidestepping this failure mode.
+
+Beyond the attribution model itself, we wrap DSAN in a full forensic pipeline: face extraction and tracking, XceptionNet-based binary detection~\cite{chollet2017xception}, temporal consistency scoring, method attribution, and \textit{dual Grad-CAM++} explainability~\cite{chattopadhay2018gradcampp} that visualizes saliency in both the spatial and frequency domains. The pipeline is modular on purpose - each piece can be tested, upgraded, and explained on its own - which mirrors how forensic investigation actually works: first confirm that manipulation happened, then figure out the method.
+
+\smallskip
+\noindent Our contributions are:
+\begin{enumerate}
+    \item A dual-stream attribution architecture with gated bilinear fusion. We show formally that two-token self-attention degenerates into scalar interpolation, and that our gating mechanism provides $512\times$ more per-dimension selectivity.
+    \item A multi-task training objective that combines cross-entropy, supervised contrastive learning~\cite{khosla2020supervised}, and a Face~X-ray-inspired~\cite{li2020facexray} blending-mask head, with principled per-sample loss masking.
+    \item A complete forensic pipeline from raw video to structured report, with dual Grad-CAM++ explainability that produces separate saliency maps for each stream.
+\end{enumerate}

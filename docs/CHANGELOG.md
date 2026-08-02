@@ -54,6 +54,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com) loosely; versions 
 
 - **`api/openapi.json`**: committed OpenAPI 3 snapshot from the live FastAPI app; regenerate with `python scripts/export_openapi.py` from the repo root. **CI** (`V2A-09`) re-runs the export and fails if the file drifts (`git diff --exit-code -- api/openapi.json`).
 - **V2A-10**: `api/tests/test_integration_httpx_job_flow.py` — multi-step `httpx.AsyncClient` + `httpx.ASGITransport` job flow (health + upload → poll → PDF). **`pytest.ini`** marker `integration_httpx`. **`.github/workflows/ci.yml`**: new **`docker-compose-smoke`** job runs `docker compose up` and `./scripts/docker-smoke.sh`, then `docker compose down -v`.
+- **GPU env fix**: replaced `pytorch-grad-cam` dependency with the correct PyPI package **`grad-cam==1.5.5`** (jacobgil/pytorch-grad-cam). Updates `requirements.txt` and `requirements-gpu.txt`.
 
 ### Added (V2-alpha API — V2A-08)
 

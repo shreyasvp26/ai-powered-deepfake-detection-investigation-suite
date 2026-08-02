@@ -1,0 +1,71 @@
+% DSAN: Dual-Stream Attribution Network for Explainable Deepfake 
+% Detection and Method Identification
+% IEEE Conference Paper - Overleaf Compatible
+
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% ============ Packages ============
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{bm}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows.meta,positioning,fit,calc,decorations.pathreplacing}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+
+% ============ Custom Commands ============
+\newcommand{\vect}[1]{\mathbf{#1}}
+\newcommand{\mat}[1]{\mathbf{#1}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\supcon}{\mathcal{L}_{\text{sc}}}
+\newcommand{\lce}{\mathcal{L}_{\text{ce}}}
+\newcommand{\lmask}{\mathcal{L}_{\text{mask}}}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{DSAN: Dual-Stream Attribution Network for Explainable Deepfake Detection and Method Identification}
+
+\author{
+\IEEEauthorblockN{Shreyas Patil}
+\IEEEauthorblockA{\textit{Department of Computer Engineering} \\
+Under the supervision of Dr.\ Kaptan Singh \\
+}
+}
+
+\maketitle
+
+\begin{abstract}
+Most deepfake detection work focuses on a binary question: is a face real or fake? But forensic investigators need more than that - they want to know \textit{how} the manipulation was done. We introduce the \textbf{Dual-Stream Attribution Network (DSAN)}, designed specifically for this attribution task. DSAN feeds each face crop through two streams in parallel: an RGB stream (EfficientNet-B4) that picks up spatial manipulation artifacts, and a frequency stream (ResNet-18) that processes Spatial Rich Model noise residuals alongside 2D FFT spectral features. These are merged through a \textit{gated bilinear fusion} layer. A key finding is that na\"ive multi-head attention over just two tokens collapses to scalar interpolation, effectively killing the frequency stream; our per-dimension gating sidesteps this problem. The training objective combines cross-entropy, supervised contrastive learning, and a blending-mask decoder inspired by Face~X-ray. We embed DSAN in a modular forensic pipeline covering face extraction, binary detection, temporal consistency analysis, and \textit{dual} Grad-CAM++ explainability across both spatial and spectral domains. After training on a 70/30 mix of c23 and c40 FaceForensics++ frames with identity-safe splits, the system reaches \textbf{0.941 AUC and 91.2\% accuracy} on binary detection and \textbf{90.0\% macro F1} on four-class attribution on the standard c23 test split, with an Expected Calibration Error of 0.043. Cross-dataset probes on Celeb-DF~v2 and DFDC preview show the expected $\sim$22-point AUC drop, which we report honestly rather than tuning around.
+\end{abstract}
+
+\begin{IEEEkeywords}
+deepfake attribution, dual-stream network, frequency forensics, gated fusion, supervised contrastive learning, Grad-CAM++
+\end{IEEEkeywords}
+
+% ============================================================
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/methodology}
+\input{sections/experiments}
+\input{sections/results}
+\input{sections/conclusion}
+% ============================================================
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
