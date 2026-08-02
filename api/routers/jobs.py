@@ -10,7 +10,7 @@ from starlette.requests import Request
 
 from api.db.models import Job, JobState
 from api.deps.db import get_db
-from api.deps.limiter import limiter
+from api.deps.limiter import _client_key, limiter
 from api.deps.settings import get_settings
 from api.deps.storage import get_storage
 from api.jobs.queueing import enqueue_process_job
@@ -27,8 +27,27 @@ def _require_uuid(job_id: str) -> str:
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"error": {"code": "invalid_job_id", "message": "ID must be a UUID"}},
+            detail={
+                "error": {"code": "invalid_job_id", "message": "ID must be a UUID"}
+            },
         ) from None
+
+
+def job_key_func(request: Request) -> str:
+    ip = _client_key(request)
+    is_auth = bool(
+        request.cookies.get("authjs.session-token")
+        or request.cookies.get("__Secure-authjs.session-token")
+        or request.headers.get("authorization")
+    )
+    return f"{ip}:{is_auth}"
+
+
+def get_job_rate_limit(key: str) -> str:
+    # V2A-07: 10/hour if authenticated, else 3/hour
+    if key.endswith(":True"):
+        return "10/hour"
+    return "3/hour"
 
 
 @router.post(
@@ -36,7 +55,7 @@ def _require_uuid(job_id: str) -> str:
     response_model=JobQueuedResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-@limiter.limit("3/hour")
+@limiter.limit(get_job_rate_limit, key_func=job_key_func)
 async def create_job(
     file: Annotated[UploadFile, File(...)],
     session: Annotated[Session, Depends(get_db)],
@@ -46,7 +65,9 @@ async def create_job(
     settings = get_settings()
     raw = await file.read()
     try:
-        vu = validate_video_bytes(raw, settings=settings, content_type=file.content_type)
+        vu = validate_video_bytes(
+            raw, settings=settings, content_type=file.content_type
+        )
     except ValueError as e:
         code = e.args[0] if e.args else "validation_error"
         raise HTTPException(
@@ -102,7 +123,9 @@ def get_job(
             detail={"error": {"code": "job_not_found"}},
         )
     st: str = job.state
-    result: dict[str, Any] | None = job.result_json if st == JobState.done.value else None
+    result: dict[str, Any] | None = (
+        job.result_json if st == JobState.done.value else None
+    )
     err: str | None = job.error_message if st == JobState.failed.value else None
     return JobGetResponse(
         id=job.id,
@@ -134,7 +157,9 @@ def get_job_report_pdf(
         if job.state == JobState.failed.value:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail={"error": {"code": "job_failed", "message": job.error_message or ""}},
+                detail={
+                    "error": {"code": "job_failed", "message": job.error_message or ""}
+                },
             )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

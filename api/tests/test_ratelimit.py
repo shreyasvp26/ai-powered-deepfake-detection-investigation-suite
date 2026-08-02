@@ -47,3 +47,26 @@ def test_different_xff_bypasses_limit(client) -> None:
         headers={"X-Forwarded-For": "198.51.100.9"},
     )
     assert r.status_code == 202
+
+
+def test_authenticated_limit_is_higher(client) -> None:
+    """Authenticated requests get 10/hour instead of 3/hour."""
+    hdr = {"X-Forwarded-For": "198.51.100.15"}
+    cookies = {"authjs.session-token": "mock-token"}
+    # Can do 10 requests successfully
+    for i in range(10):
+        r = client.post(
+            "/v1/jobs",
+            files={"file": (f"ua{i}.mp4", io.BytesIO(_MIN), "video/mp4")},
+            headers=hdr,
+            cookies=cookies,
+        )
+        assert r.status_code == 202, r.text
+    # The 11th request should be rate limited
+    r11 = client.post(
+        "/v1/jobs",
+        files={"file": ("ua10.mp4", io.BytesIO(_MIN), "video/mp4")},
+        headers=hdr,
+        cookies=cookies,
+    )
+    assert r11.status_code == 429
